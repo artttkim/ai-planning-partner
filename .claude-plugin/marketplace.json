@@ -1,0 +1,17 @@
+{
+  "name": "ai-planning-partner",
+  "owner": {
+    "name": "PLANWIT"
+  },
+  "metadata": {
+    "description": "플랜윗(PLANWIT) 상세 기획 도우미 플러그인 배포 목록"
+  },
+  "plugins": [
+    {
+      "name": "planwit",
+      "source": "./planwit",
+      "description": "PRD를 받아 상세 기획 산출물을 만들고 검수받는 상세 기획 도우미",
+      "version": "0.1.0"
+    }
+  ]
+}
