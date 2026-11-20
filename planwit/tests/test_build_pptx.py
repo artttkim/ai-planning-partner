@@ -22,7 +22,7 @@ def task(tmp_path):
 
 def test_parse_screens(task):
     screens = load_screens(task)
-    assert [s.id for s in screens] == ["SCR-010", "SCR-020", "SCR-020-P1"]
+    assert [s.id for s in screens] == ["SCR-010", "SCR-020", "SCR-020-P1", "SCR-030"]
     login = screens[0]
     assert login.status == "변경"
     assert login.requirements == ["FR-001", "FR-003"]
@@ -34,7 +34,7 @@ def test_build_creates_named_shapes(task):
     out = build_pptx.build(task, today="2026.11.20")
     assert out.name == "화면설계서_로그인정책개선_v0.1.pptx"
     prs = Presentation(str(out))
-    assert len(prs.slides) == 3 + 3  # 표지, 변경 이력, 화면 목록 + 화면 3개
+    assert len(prs.slides) == 3 + 4  # 표지, 변경 이력, 화면 목록 + 화면 4개
     names = {sh.name for slide in prs.slides for sh in slide.shapes}
     for expected in ["SCR-010/c5", "SCR-010/c5/changed", "SCR-010/marker/2", "SCR-010/desc", "SCR-020-P1/c2"]:
         assert expected in names
