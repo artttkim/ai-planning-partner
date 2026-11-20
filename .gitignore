@@ -1,0 +1,5 @@
+__pycache__/
+.pytest_cache/
+planwit/tests/samples/**/회사양식/
+planwit/tests/samples/**/개발용/
+planwit/tests/samples/**/.planwit/

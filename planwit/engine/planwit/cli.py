@@ -38,6 +38,22 @@ def doctor() -> int:
     return 0
 
 
+def build(kind: str, task: str, version: str) -> int:
+    from pathlib import Path
+
+    from . import build_pptx, snapshot
+
+    task_dir = Path(task).resolve()
+    try:
+        out = build_pptx.build(task_dir, version=version)
+    except (ValueError, FileNotFoundError) as e:
+        print(f"생성 실패: {e}")
+        return 1
+    snapshot.record(task_dir, out)
+    print(f"생성: {out.relative_to(task_dir).as_posix()}")
+    return 0
+
+
 def main(argv=None) -> int:
     # Windows 콘솔에서도 한글이 깨지지 않게 한다.
     for stream in (sys.stdout, sys.stderr):
@@ -48,10 +64,16 @@ def main(argv=None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
     sub.add_parser("doctor", help="Python과 패키지 점검")
     sub.add_parser("version", help="엔진 버전")
+    b = sub.add_parser("build", help="원본에서 파일 생성")
+    b.add_argument("kind", choices=["pptx"], help="만들 파일 종류")
+    b.add_argument("task", help="과제 폴더 경로")
+    b.add_argument("--version", dest="doc_version", default="v0.1", help="문서 버전 (기본 v0.1)")
 
     args = parser.parse_args(argv)
     if args.command == "doctor":
         return doctor()
+    if args.command == "build":
+        return build(args.kind, args.task, args.doc_version)
     if args.command == "version":
         print(__version__)
         return 0
