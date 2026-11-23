@@ -5,7 +5,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "python \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" detect --hook 2>/dev/null || py \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" detect --hook 2>/dev/null || true",
+            "command": "(python \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" migrate 2>/dev/null || py \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" migrate 2>/dev/null || true); python \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" detect --hook 2>/dev/null || py \"${CLAUDE_PLUGIN_ROOT}/engine/run.py\" detect --hook 2>/dev/null || true",
             "timeout": 30
           }
         ]

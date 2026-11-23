@@ -16,7 +16,7 @@ SAMPLE = Path(__file__).parent / "samples" / "2026-11-20_로그인_정책_개선
 @pytest.fixture
 def task(tmp_path):
     dst = tmp_path / SAMPLE.name
-    shutil.copytree(SAMPLE, dst, ignore=shutil.ignore_patterns("회사양식", ".planwit"))
+    shutil.copytree(SAMPLE, dst, ignore=shutil.ignore_patterns("3_결과물", ".planwit"))
     return dst
 
 
@@ -99,7 +99,7 @@ components:
 
 
 def test_nested_components_and_popup_background(task):
-    folder = task / "원본" / "03_화면설계"
+    folder = task / "2_기획문서" / "03_화면설계"
     (folder / "SCR-090.md").write_text(NESTED, encoding="utf-8")
     (folder / "SCR-090-P1.md").write_text(POPUP, encoding="utf-8")
     screen = {s.id: s for s in load_screens(task)}["SCR-090"]

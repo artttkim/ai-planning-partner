@@ -4,13 +4,14 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from . import paths
 from .screens import all_components, load_screens
 
 FR_RE = re.compile(r"^\|\s*(FR-\d+(?:-\d+)?)\s*\|")
 
 
 def task_requirements(task_dir: Path) -> list[str]:
-    summary = Path(task_dir) / "과제요약.md"
+    summary = paths.summary(task_dir)
     if not summary.exists():
         return []
     return [m[1] for line in summary.read_text(encoding="utf-8").splitlines() if (m := FR_RE.match(line.strip()))]

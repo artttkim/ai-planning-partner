@@ -17,7 +17,7 @@ SAMPLE = Path(__file__).parent / "samples" / "2026-11-20_로그인_정책_개선
 @pytest.fixture
 def workspace(tmp_path):
     task = tmp_path / "과제" / SAMPLE.name
-    shutil.copytree(SAMPLE, task, ignore=shutil.ignore_patterns("회사양식", "개발용", ".planwit"))
+    shutil.copytree(SAMPLE, task, ignore=shutil.ignore_patterns("3_결과물", ".planwit"))
     return tmp_path
 
 
@@ -27,7 +27,7 @@ def _task(ws):
 
 def test_build_dev(workspace):
     files = build_dev.build(_task(workspace))
-    data = yaml.safe_load((_task(workspace) / "개발용" / "화면" / "SCR-010.yaml").read_text(encoding="utf-8"))
+    data = yaml.safe_load((_task(workspace) / "3_결과물" / "개발용" / "SCR-010.yaml").read_text(encoding="utf-8"))
     assert len(files) == 4
     assert data["status"] == "changed"
     assert data["policies"] == ["POL-001"]
@@ -40,7 +40,7 @@ def test_validate_sample_is_clean(workspace):
 
 
 def test_validate_finds_missing_screen(workspace):
-    (_task(workspace) / "원본" / "03_화면설계" / "SCR-030.md").unlink()
+    (_task(workspace) / "2_기획문서" / "03_화면설계" / "SCR-030.md").unlink()
     problems = validate.check(_task(workspace))
     assert any("SCR-030" in p for p in problems)
 
@@ -66,3 +66,26 @@ def test_extract_pptx(workspace):
     out = build_pptx.build(_task(workspace), today="2026.11.20")
     text = to_text(out)
     assert "다시 만나서 반가워요" in text
+
+
+def test_migrate_old_layout(tmp_path):
+    from planwit import paths
+
+    task = tmp_path / "과제" / "2026-11-20_예전_과제"
+    (task / "원본" / "04_화면설계").mkdir(parents=True)
+    (task / "입력").mkdir()
+    (task / "회사양식").mkdir()
+    (task / "개발용" / "화면").mkdir(parents=True)
+    (task / "과제요약.md").write_text("# 예전 과제\n\n- 원본: `원본/02_영향분석.md`, 화면 `개발용/화면/`\n", encoding="utf-8")
+    (task / "검수함.md").write_text("# 검수함\n", encoding="utf-8")
+    (task / "결정기록.md").write_text("# 결정 기록\n", encoding="utf-8")
+    (task / "개발용" / "화면" / "SCR-010.yaml").write_text("id: SCR-010\n", encoding="utf-8")
+    moved = paths.migrate(task)
+    assert moved
+    for name in ["00_과제요약.md", "01_검수함.md", "02_결정기록.md", "1_입력자료", "2_기획문서/04_화면설계",
+                 "3_결과물/개발용/SCR-010.yaml"]:
+        assert (task / name).exists(), name
+    assert not (task / "개발용").exists()
+    text = (task / "00_과제요약.md").read_text(encoding="utf-8")
+    assert "`2_기획문서/02_영향분석.md`" in text and "`3_결과물/개발용/`" in text
+    assert paths.migrate(task) == []  # 두 번 실행해도 그대로

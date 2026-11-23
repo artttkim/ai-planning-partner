@@ -110,6 +110,17 @@ def detect(workspace: str | None, hook: bool) -> int:
     return 0
 
 
+def migrate(workspace) -> int:
+    from . import paths
+    root = Path(workspace or Path.cwd())
+    tasks = [p for p in sorted((root / "과제").glob("*/")) if p.is_dir()] if (root / "과제").exists() else [root]
+    for task in tasks:
+        moved = paths.migrate(task)
+        if moved:
+            print(f"{task.name}: " + ", ".join(moved))
+    return 0
+
+
 def main(argv=None) -> int:
     for stream in (sys.stdout, sys.stderr):
         if hasattr(stream, "reconfigure"):
@@ -130,6 +141,8 @@ def main(argv=None) -> int:
     e = sub.add_parser("extract", help="문서를 텍스트로 변환")
     e.add_argument("path")
     e.add_argument("--out")
+    mg = sub.add_parser("migrate", help="예전 구조의 과제 폴더를 지금 구조로 옮기기")
+    mg.add_argument("workspace", nargs="?")
     dt = sub.add_parser("detect", help="직접 고친 회사 양식 파일 감지")
     dt.add_argument("workspace", nargs="?")
     dt.add_argument("--hook", action="store_true")
@@ -148,4 +161,6 @@ def main(argv=None) -> int:
         return extract(args.path, args.out)
     if args.command == "detect":
         return detect(args.workspace, args.hook)
+    if args.command == "migrate":
+        return migrate(args.workspace)
     return 2

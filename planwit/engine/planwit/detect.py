@@ -8,14 +8,15 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from . import paths
 from .snapshot import file_hash, manifest_path, pptx_texts, record
 
 
 def _source_hint(task_dir: Path, key: str) -> str:
     parts = key.split("/")
     screen = parts[0]
-    folder = next((p for p in (task_dir / "원본").glob("*화면설계*") if p.is_dir()), None)
-    src = f"원본/{folder.name}/{screen}.md" if folder else f"{screen}.md"
+    folder = next((p for p in paths.docs(task_dir).glob("*화면설계*") if p.is_dir()), None)
+    src = f"{paths.DOCS}/{folder.name}/{screen}.md" if folder else f"{screen}.md"
     if len(parts) >= 2 and parts[1] == "desc":
         return f"{src} 설명 표 {parts[2]}번 행 (항목 | 설명)"
     if len(parts) >= 2 and parts[1] == "header":

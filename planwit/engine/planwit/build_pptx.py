@@ -16,6 +16,7 @@ from pptx.enum.text import MSO_ANCHOR, PP_ALIGN
 from pptx.oxml.ns import qn
 from pptx.util import Inches, Pt
 
+from . import paths
 from .screens import Component, Screen, load_screens, task_title
 
 FONT = "맑은 고딕"
@@ -813,8 +814,8 @@ def build(task_dir: Path, version: str = "v0.1", today: str | None = None) -> Pa
     for s in screens:
         _screen_slide(prs, s, version, by_id)
 
-    out_dir = task_dir / "회사양식"
-    out_dir.mkdir(exist_ok=True)
+    out_dir = paths.output(task_dir)
+    out_dir.mkdir(parents=True, exist_ok=True)
     out = out_dir / f"화면설계서_{title.replace(' ', '')}_{version}.pptx"
     prs.save(out)
     return out

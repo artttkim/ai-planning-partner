@@ -6,6 +6,7 @@ from pathlib import Path
 
 import yaml
 
+from . import paths
 from .screens import load_screens
 
 TYPE_MAP = {
@@ -22,7 +23,7 @@ POLICY_RE = re.compile(r"POL-\d+")
 
 def build(task_dir: Path) -> list[Path]:
     task_dir = Path(task_dir)
-    out_dir = task_dir / "개발용" / "화면"
+    out_dir = paths.dev(task_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     written = []
     for s in load_screens(task_dir):

@@ -7,6 +7,8 @@ from pathlib import Path
 
 import yaml
 
+from . import paths
+
 TITLE_RE = re.compile(r"^#\s+(?P<id>\S+)\s+(?P<name>.+?)\s*·\s*(?P<status>신규|변경|참고)\s*$")
 META_RE = re.compile(r"^-\s*(?P<key>[^:]+):\s*(?P<value>.*)$")
 YAML_RE = re.compile(r"```ya?ml\s*\n(?P<body>.*?)```", re.S)
@@ -159,7 +161,7 @@ def _id_key(screen_id: str):
 
 
 def find_screen_dir(task_dir: Path) -> Path:
-    src = task_dir / "원본"
+    src = paths.docs(task_dir)
     candidates = sorted(p for p in src.glob("*화면설계*") if p.is_dir())
     if not candidates:
         raise FileNotFoundError(f"{src}에 화면설계 폴더가 없어요.")
@@ -173,8 +175,8 @@ def load_screens(task_dir: Path) -> list[Screen]:
 
 
 def task_title(task_dir: Path) -> str:
-    """과제요약.md의 첫 제목, 없으면 폴더 이름에서 날짜를 뺀 것."""
-    summary = task_dir / "과제요약.md"
+    """00_과제요약.md의 첫 제목, 없으면 폴더 이름에서 날짜를 뺀 것."""
+    summary = paths.summary(task_dir)
     if summary.exists():
         for line in summary.read_text(encoding="utf-8").splitlines():
             if line.startswith("# "):
