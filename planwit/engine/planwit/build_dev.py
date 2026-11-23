@@ -15,7 +15,7 @@ TYPE_MAP = {
     "제목": "text.title", "본문": "text.body", "오류문구": "text.error", "안내문구": "text.helper",
     "목록": "list", "카드": "card", "표": "table", "이미지": "image", "아이콘": "icon", "배지": "badge",
     "팝업": "dialog", "바텀시트": "bottom_sheet", "토스트": "toast", "로딩": "loading", "빈화면": "empty_state",
-    "구분선": "divider",
+    "구분선": "divider", "행": "row", "묶음": "group", "아바타": "avatar",
 }
 POLICY_RE = re.compile(r"POL-\d+")
 
@@ -28,9 +28,18 @@ def build(task_dir: Path) -> list[Path]:
     for s in load_screens(task_dir):
         policies = sorted({p for d in s.descriptions for p in POLICY_RE.findall(f"{d.policy} {d.text}")})
         by_marker = {str(d.no): d for d in s.descriptions}
-        components = []
-        for c in s.components:
-            item = {"id": c.id, "type": TYPE_MAP.get(c.type.replace(" ", ""), "custom"), "label": c.label}
+
+        def convert(c):
+            item = {"id": c.id, "type": TYPE_MAP.get(c.type.replace(" ", ""), "custom")}
+            if c.label:
+                item["label"] = c.label
+            if c.items:
+                item["items"] = c.items
+            if c.selected is not None:
+                item["selected"] = c.selected
+            for key in ("left", "right"):
+                if getattr(c, key):
+                    item[f"actions_{key}"] = getattr(c, key)
             if c.changed:
                 item["changed"] = True
             d = by_marker.get(str(c.marker)) if c.marker is not None else None
@@ -38,7 +47,11 @@ def build(task_dir: Path) -> list[Path]:
                 item["behavior"] = d.text
                 if d.policy:
                     item["policy"] = d.policy
-            components.append(item)
+            if c.children:
+                item["children"] = [convert(ch) for ch in c.children]
+            return item
+
+        components = [convert(c) for c in s.components]
         data = {
             "id": s.id,
             "name": s.name,
@@ -59,4 +72,8 @@ def build(task_dir: Path) -> list[Path]:
         out = out_dir / f"{s.id}.yaml"
         out.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
         written.append(out)
+    # 원본에서 지운 화면의 명세는 함께 지운다.
+    for old in out_dir.glob("SCR-*.yaml"):
+        if old not in written:
+            old.unlink()
     return written

@@ -47,3 +47,66 @@ def test_snapshot_reads_back_same_text(task):
     assert texts["SCR-010/c5"] == "아이디 또는 비밀번호가 맞지 않아요. (4/5회)"
     assert texts["SCR-010/desc/2"].startswith("실패 안내 | 실패 횟수를 함께 표시")
     assert (task / ".planwit" / "manifest.json").exists()
+
+
+NESTED = """# SCR-090 방 상세 · 신규
+
+- 관련 기능: FR-001
+
+## 구성
+
+```yaml
+frame: mobile
+components:
+  - {id: c1, type: 상단바, label: 방, left: [뒤로]}
+  - id: c2
+    type: 행
+    children:
+      - {id: c2-1, type: 보조버튼, label: 복사, size: small}
+      - {id: c2-2, type: 기본버튼, label: 공유하기, marker: 1}
+  - {id: c3, type: 하단탭바, items: [알람, 다함께], selected: 1}
+```
+
+## 설명
+
+| No | 항목 | 설명 | 정책 |
+|---|---|---|---|
+| 1 | 공유하기 | 공유 시트를 연다 | |
+"""
+
+POPUP = """# SCR-090-P1 확인 · 신규
+
+- 관련 기능: FR-001
+
+## 구성
+
+```yaml
+frame: mobile
+components:
+  - id: c1
+    type: 팝업
+    label: "나갈까요?\n나가면 알람이 울리지 않아요."
+    children:
+      - {id: c2, type: 기본버튼, label: 나가기, marker: 1}
+```
+
+## 설명
+
+| No | 항목 | 설명 | 정책 |
+|---|---|---|---|
+| 1 | 나가기 | 나간다 | |
+"""
+
+
+def test_nested_components_and_popup_background(task):
+    folder = task / "원본" / "03_화면설계"
+    (folder / "SCR-090.md").write_text(NESTED, encoding="utf-8")
+    (folder / "SCR-090-P1.md").write_text(POPUP, encoding="utf-8")
+    screen = {s.id: s for s in load_screens(task)}["SCR-090"]
+    assert screen.components[1].children[1].marker == 1
+    assert screen.components[2].items == ["알람", "다함께"]
+    out = build_pptx.build(task, today="2026.11.20")
+    names = {sh.name for slide in Presentation(str(out)).slides for sh in slide.shapes}
+    for expected in ["SCR-090/c2-1", "SCR-090/c2-2", "SCR-090/marker/1", "SCR-090/c3/2",
+                     "SCR-090-P1/c2", "SCR-090-P1/dim", "bg-SCR-090-c2-2"]:
+        assert expected in names

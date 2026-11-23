@@ -23,6 +23,18 @@ class Component:
     y: float | None = None
     w: float | None = None
     h: float | None = None
+    children: list["Component"] = field(default_factory=list)
+    items: list[str] = field(default_factory=list)   # 탭, 하단탭바, 라디오, 체크박스의 항목
+    selected: int | None = None                       # items 중 선택된 항목 순서(0부터)
+    left: list[str] = field(default_factory=list)    # 상단바 왼쪽 아이콘 (예: 뒤로)
+    right: list[str] = field(default_factory=list)   # 상단바 오른쪽 아이콘 (예: 더보기)
+    align: str = ""                                   # 글자 정렬: left, center, right
+    size: str = ""                                    # 버튼 크기: small
+
+    def walk(self):
+        yield self
+        for ch in self.children:
+            yield from ch.walk()
 
 
 @dataclass
@@ -103,17 +115,7 @@ def parse_screen(path: Path) -> Screen:
     if ym:
         data = yaml.safe_load(ym["body"]) or {}
         screen.frame = data.get("frame", "web" if screen.platform == "웹" else "mobile")
-        for c in data.get("components", []) or []:
-            screen.components.append(
-                Component(
-                    id=str(c["id"]),
-                    type=str(c.get("type", "기타")),
-                    label=str(c.get("label", "")),
-                    changed=bool(c.get("changed", False)),
-                    marker=c.get("marker"),
-                    x=c.get("x"), y=c.get("y"), w=c.get("w"), h=c.get("h"),
-                )
-            )
+        screen.components = [_component(c, f"c{i + 1}") for i, c in enumerate(data.get("components", []) or [])]
 
     for cells in _table_rows(sec.get("설명", "")):
         cells += [""] * (4 - len(cells))
@@ -121,6 +123,35 @@ def parse_screen(path: Path) -> Screen:
 
     screen.note = sec.get("비고", "").strip()
     return screen
+
+
+def _list(v) -> list[str]:
+    if v is None:
+        return []
+    return [str(x) for x in v] if isinstance(v, list) else [str(v)]
+
+
+def _component(c: dict, default_id: str) -> Component:
+    cid = str(c.get("id", default_id))
+    return Component(
+        id=cid,
+        type=str(c.get("type", "기타")),
+        label=str(c.get("label", "") or ""),
+        changed=bool(c.get("changed", False)),
+        marker=c.get("marker"),
+        x=c.get("x"), y=c.get("y"), w=c.get("w"), h=c.get("h"),
+        children=[_component(ch, f"{cid}-{i + 1}") for i, ch in enumerate(c.get("children", []) or [])],
+        items=_list(c.get("items")),
+        selected=c.get("selected"),
+        left=_list(c.get("left")),
+        right=_list(c.get("right")),
+        align=str(c.get("align", "") or ""),
+        size=str(c.get("size", "") or ""),
+    )
+
+
+def all_components(screen: "Screen") -> list[Component]:
+    return [c for top in screen.components for c in top.walk()]
 
 
 def _id_key(screen_id: str):

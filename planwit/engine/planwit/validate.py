@@ -4,7 +4,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
-from .screens import load_screens
+from .screens import all_components, load_screens
 
 FR_RE = re.compile(r"^\|\s*(FR-\d+(?:-\d+)?)\s*\|")
 
@@ -28,7 +28,11 @@ def check(task_dir: Path) -> list[str]:
             problems.append(f"{fr}가 어떤 화면에도 연결되지 않았어요.")
     known = set(ids)
     for s in screens:
-        markers = {str(c.marker) for c in s.components if c.marker is not None}
+        comps = all_components(s)
+        cids = [c.id for c in comps]
+        for dup in sorted({i for i in cids if cids.count(i) > 1}):
+            problems.append(f"{s.id}: 구성 요소 ID {dup}가 두 번 이상 쓰였어요.")
+        markers = {str(c.marker) for c in comps if c.marker is not None}
         descs = {str(d.no) for d in s.descriptions}
         for m in sorted(markers - descs):
             problems.append(f"{s.id}: 번호 {m}에 설명이 없어요.")
