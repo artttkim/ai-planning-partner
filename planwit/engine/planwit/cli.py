@@ -89,20 +89,30 @@ def extract(path: str, out: str | None) -> int:
 
 def detect(workspace: str | None, hook: bool) -> int:
     from . import detect as d
+    from . import paths
 
     if hook:
         # 훅에서는 표준 입력으로 세션 정보(JSON)가 들어온다. 어떤 오류도 기획자의 요청을 막지 않게 한다.
+        # 플랜윗 작업 공간이 아니면 아무것도 읽거나 쓰지 않는다.
         try:
             raw = sys.stdin.read()
             workspace = json.loads(raw).get("cwd") if raw.strip() else None
         except Exception:
             workspace = None
+        root = Path(workspace or Path.cwd())
         try:
-            msg = d.scan(Path(workspace or Path.cwd()))
+            if not paths.is_workspace(root):
+                return 0
+            _migrate_tasks(root)
+            msg = d.scan(root)
         except Exception:
             return 0
     else:
-        msg = d.scan(Path(workspace or Path.cwd()))
+        root = Path(workspace or Path.cwd())
+        if not paths.is_workspace(root):
+            print(f"플랜윗 작업 공간이 아님: {root}", file=sys.stderr)
+            return 1
+        msg = d.scan(root)
     if msg:
         print(msg)
     elif not hook:
@@ -110,14 +120,23 @@ def detect(workspace: str | None, hook: bool) -> int:
     return 0
 
 
+def _migrate_tasks(root: Path):
+    """작업 공간의 과제/ 아래 과제만 옮긴다. 작업 공간 밖은 건드리지 않는다."""
+    from . import paths
+    for task in sorted((root / "과제").glob("*/")):
+        if task.is_dir():
+            moved = paths.migrate(task)
+            if moved:
+                print(f"{task.name}: " + ", ".join(moved))
+
+
 def migrate(workspace) -> int:
     from . import paths
     root = Path(workspace or Path.cwd())
-    tasks = [p for p in sorted((root / "과제").glob("*/")) if p.is_dir()] if (root / "과제").exists() else [root]
-    for task in tasks:
-        moved = paths.migrate(task)
-        if moved:
-            print(f"{task.name}: " + ", ".join(moved))
+    if not paths.is_workspace(root):
+        print(f"플랜윗 작업 공간이 아님: {root}", file=sys.stderr)
+        return 1
+    _migrate_tasks(root)
     return 0
 
 

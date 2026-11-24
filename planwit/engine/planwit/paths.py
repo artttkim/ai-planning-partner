@@ -46,6 +46,27 @@ _TEXT_RENAMES = [
 ]
 
 
+WORKSPACE_MARK = ".planwit-workspace"
+
+
+def is_workspace(root: Path) -> bool:
+    """플랜윗 작업 공간인지. 아니면 엔진은 그 폴더에서 아무것도 읽거나 쓰지 않는다.
+
+    표시 파일이 있거나, 예전 설정으로 만든 작업 공간(과제/, 회사/ 폴더와 플랜윗 CLAUDE.md)이면 작업 공간이다.
+    """
+    root = Path(root)
+    if (root / WORKSPACE_MARK).is_file():
+        return True
+    claude = root / "CLAUDE.md"
+    if not ((root / "과제").is_dir() and (root / "회사").is_dir() and claude.is_file()):
+        return False
+    try:
+        text = claude.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        return False
+    return text.startswith("# 플랜윗 작업 공간") or "\n## 플랜윗" in text
+
+
 def summary(task_dir: Path) -> Path:
     return Path(task_dir) / SUMMARY
 

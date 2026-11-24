@@ -89,3 +89,34 @@ def test_migrate_old_layout(tmp_path):
     text = (task / "00_과제요약.md").read_text(encoding="utf-8")
     assert "`2_기획문서/02_영향분석.md`" in text and "`3_결과물/개발용/`" in text
     assert paths.migrate(task) == []  # 두 번 실행해도 그대로
+
+
+def test_engine_ignores_folders_outside_workspace(tmp_path, capsys):
+    """플랜윗 작업 공간이 아닌 폴더는 훅과 migrate가 건드리지 않는다."""
+    import io
+    import json as _json
+
+    from planwit import cli, paths
+
+    other = tmp_path / "other_project"
+    (other / "원본").mkdir(parents=True)
+    (other / "검수함.md").write_text("다른 프로젝트 파일", encoding="utf-8")
+    (other / "과제" / "x" / "원본").mkdir(parents=True)
+    assert not paths.is_workspace(other)
+
+    assert cli.main(["migrate", str(other)]) == 1
+    sys_stdin = sys.stdin
+    try:
+        sys.stdin = io.StringIO(_json.dumps({"cwd": str(other)}))
+        assert cli.main(["detect", "--hook"]) == 0
+    finally:
+        sys.stdin = sys_stdin
+    assert (other / "원본").is_dir() and (other / "검수함.md").is_file()
+    assert (other / "과제" / "x" / "원본").is_dir()
+
+    ws = tmp_path / "ws"
+    (ws / "과제" / "t" / "원본").mkdir(parents=True)
+    (ws / paths.WORKSPACE_MARK).write_text("", encoding="utf-8")
+    assert paths.is_workspace(ws)
+    assert cli.main(["migrate", str(ws)]) == 0
+    assert (ws / "과제" / "t" / paths.DOCS).is_dir()
