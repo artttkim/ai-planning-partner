@@ -1,6 +1,6 @@
 {
   "name": "planwit",
-  "version": "0.2.5",
+  "version": "0.2.6",
   "description": "플랜윗: PRD를 받아 상세 기획 산출물(화면 설계서, 정책서, 개발용 명세)을 만들고 기획자에게 검수받는 상세 기획 도우미",
   "author": {
     "name": "PLANWIT"

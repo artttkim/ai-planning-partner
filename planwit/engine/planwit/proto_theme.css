@@ -74,6 +74,7 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 .h { font-size: 22px; font-weight: 700; letter-spacing: -0.3px; }
 .content > .h { font-size: 20px; }
 .body { font-size: 15px; }
+.h, .body, .helper, .error { white-space: pre-line; }
 .helper { font-size: 13px; color: var(--sub); }
 .error { font-size: 13px; color: var(--danger); }
 [data-align="center"] { text-align: center; }
