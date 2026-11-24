@@ -128,10 +128,10 @@ class _Html:
 
     # 입력
     def _입력창(self, c):
-        return f'<div {_attrs(c, "input")}><span class="ph">{_t(c.label)}</span></div>'
+        return f'<div {_attrs(c, "input")}><input class="ph" placeholder="{_t(c.label)}"></div>'
 
     def _검색창(self, c):
-        return f'<div {_attrs(c, "input search")}>{_svg("검색", 18)}<span class="ph">{_t(c.label)}</span></div>'
+        return f'<div {_attrs(c, "input search")}>{_svg("검색", 18)}<input class="ph" placeholder="{_t(c.label)}"></div>'
 
     def _선택상자(self, c):
         label, _, value = c.label.partition(":")
@@ -538,9 +538,17 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-fbi .st.s닫힘 { background: #eceef1; color: #8a8f98; }
 .pw-fbi .ans { color: #4a5160; margin-top: 4px; }
 .pw-fbi input { width: 100%; font: inherit; font-size: 12px; border: 1px solid #c9ccd2; border-radius: 6px; padding: 5px 7px; margin-top: 6px; }
-body.pw-picking .pw-phone, body.pw-picking .pw-phone * { cursor: crosshair !important; }
+.input input.ph { border: 0; outline: 0; background: transparent; font: inherit; color: var(--ink); flex: 1; min-width: 0; }
+.input input.ph::placeholder { color: var(--sub); }
+.pw-mode { display: inline-flex; border: 1px solid #c9ccd2; border-radius: 8px; overflow: hidden; margin-left: 6px; }
+.pw-mode button { border: 0 !important; border-radius: 0 !important; }
+.pw-mode button.on { background: #2f6fed !important; color: #fff; }
+body.pw-editing .pw-phone { border-color: #2f6fed; }
+body.pw-editing .pw-phone [data-cid]:hover { outline: 1px dashed #2f6fed; outline-offset: 1px; }
+.pw-picked { outline: 2px solid #2f6fed !important; outline-offset: 2px; }
+.pw-hint { font-size: 12px; color: #2f4fa8; background: #f0f4ff; border-radius: 8px; padding: 6px 10px; }
 [contenteditable="true"] { outline: 2px solid #2f6fed !important; background: #fff; }
-#pw-fbcount { color: #b8660b; font-weight: 600; }
+#pw-ver { color: #8a8f98; font-size: 12px; margin-left: 6px; }
 .pw-code pre { margin-top: 8px; background: #f5f6f8; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.45; overflow: auto; max-height: 320px; white-space: pre; }
 """
 
@@ -594,7 +602,7 @@ _SHELL_JS = """
     ta.remove();
   }
   // ---------- 피드백 (serve로 열었을 때) ----------
-  var served = location.protocol.indexOf('http') === 0, fb = [], pick = false, picked = null;
+  var served = location.protocol.indexOf('http') === 0, fb = [], picked = null, mode = 'play';
   function post(url, d){
     return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(function(r){ return r.json(); });
   }
@@ -605,17 +613,16 @@ _SHELL_JS = """
   function renderFb(){
     var box = document.getElementById('pw-fb'); if (!box) return;
     var old = document.getElementById('pw-fbtext'), keep = old ? old.value : '', focused = document.activeElement === old;
-    var n = fb.filter(function(i){ return i.status === '대기'; }).length, c = document.getElementById('pw-fbcount');
-    if (c) c.textContent = n ? '피드백 ' + n + '개 남김' : '';
     var h = '<div class="pw-fb-h">피드백</div>';
     if (!served){
       box.innerHTML = h + '<div class="pw-sub">Claude에게 "기획안 열어 줘"라고 해서 연 기획안에서 피드백을 남길 수 있어요.</div>';
       return;
     }
-    h += '<div class="row2"><span class="pw-chip">' + (picked ? '요소: ' + esc(picked.label) + ' <b id="pw-unpick">×</b>' : '이 화면 전체') + '</span>' +
-         '<button id="pw-pick" class="' + (pick ? 'on' : '') + '">' + (pick ? '화면에서 요소를 누르세요' : '요소 고르기') + '</button></div>';
+    if (mode === 'edit') h += '<div class="pw-hint">고치기: 화면의 글자를 누르면 바로 고쳐져요. 다른 요소를 누르면 그 요소에 메모를 남겨요.</div>';
+    else h += '<div class="pw-sub" style="margin:0 0 6px">위의 "고치기"를 누르면 화면의 글자를 바로 고치거나 요소를 골라 메모할 수 있어요.</div>';
+    h += '<div class="row2"><span class="pw-chip">' + (picked ? '요소: ' + esc(picked.label) + ' <b id="pw-unpick">×</b>' : '이 화면 전체') + '</span></div>';
     h += '<textarea id="pw-fbtext" placeholder="이 화면에서 바꿀 점을 그냥 적어 주세요. 예: 이 토글은 반복 화면 안으로"></textarea>';
-    h += '<div class="row2"><button class="main" id="pw-fbsend">남기기</button><span class="pw-sub" style="margin:0">글자를 두 번 누르면 그 자리에서 고칠 수 있어요</span></div>';
+    h += '<div class="row2"><button class="main" id="pw-fbsend">남기기</button></div>';
     fb.filter(function(i){ return i.screen === cur; }).reverse().forEach(function(i){
       h += '<div class="pw-fbi"><span class="st s' + esc(i.status) + '">' + esc(i.status) + '</span>' +
            (i.label ? '<b>' + esc(i.label) + '</b> ' : '') +
@@ -654,7 +661,8 @@ _SHELL_JS = """
     var sec = document.getElementById(id); if (!sec) return;
     if (push !== false && cur && cur !== id) hist.push(cur);
     document.querySelectorAll('.scr.on').forEach(function(e){ e.classList.remove('on'); });
-    sec.classList.add('on'); cur = id; phone.scrollTop = 0;
+    sec.classList.add('on'); cur = id; phone.scrollTop = 0; picked = null;
+    document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); });
     document.querySelectorAll('.pw-list a').forEach(function(a){ a.classList.toggle('on', a.getAttribute('data-to') === id); });
     desc(id); marks(sec);
     if (history.replaceState) history.replaceState(null, '', '#' + id + (view === 'dev' ? '~dev' : ''));
@@ -663,32 +671,12 @@ _SHELL_JS = """
     var p = hist.pop() || parentOf(cur);
     if (p) show(p, false);
   }
-  phone.addEventListener('click', function(e){
-    if (pick){
-      e.preventDefault(); e.stopPropagation();
-      var t = e.target.closest('[data-cid]');
-      if (t && !t.closest('.bg')){
-        picked = {cid: t.getAttribute('data-cid'), label: (t.innerText || '').trim().split(String.fromCharCode(10))[0].slice(0, 30) || t.getAttribute('data-cid')};
-      }
-      pick = false; document.body.classList.remove('pw-picking'); renderFb();
-      return;
-    }
-    if (e.target.closest('[contenteditable="true"]')) return;
-    var el = e.target.closest('[data-go], [data-back]');
-    if (!el || el.closest('.bg')) return;
-    e.preventDefault();
-    if (el.hasAttribute('data-go')) show(el.getAttribute('data-go')); else back();
-  });
-  document.querySelectorAll('.pw-list a').forEach(function(a){
-    a.addEventListener('click', function(){ hist = []; show(a.getAttribute('data-to')); });
-  });
-  document.getElementById('pw-back').addEventListener('click', back);
-  document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
-  phone.addEventListener('dblclick', function(e){
-    if (!served) return;
-    var el = e.target.closest('[data-cid]');
-    if (!el || el.closest('.bg') || el.querySelector('[data-cid]') || el.closest('[data-go], [data-back]')) return;
-    var before = (el.innerText || '').trim(); if (!before) return;
+  function labelOf(t){
+    var inp = t.querySelector('input');
+    return ((t.innerText || '').trim().split(String.fromCharCode(10))[0] || (inp && inp.placeholder) || t.getAttribute('data-cid')).slice(0, 30);
+  }
+  function editText(el){
+    var before = (el.innerText || '').trim();
     el.setAttribute('contenteditable', 'true'); el.focus();
     function done(){
       el.removeAttribute('contenteditable'); el.removeEventListener('blur', done);
@@ -699,14 +687,45 @@ _SHELL_JS = """
     }
     el.addEventListener('blur', done);
     el.addEventListener('keydown', function(k){ if (k.key === 'Enter'){ k.preventDefault(); el.blur(); } if (k.key === 'Escape'){ el.innerText = before; el.blur(); } });
+  }
+  function setMode(m){
+    mode = m; document.body.classList.toggle('pw-editing', m === 'edit');
+    document.querySelectorAll('.pw-mode button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); });
+    if (m === 'play'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); }
+    renderFb();
+  }
+  document.querySelectorAll('.pw-mode button').forEach(function(b){ b.addEventListener('click', function(){ setMode(b.getAttribute('data-mode')); }); });
+  phone.addEventListener('click', function(e){
+    if (mode === 'edit'){
+      if (e.target.closest('[contenteditable="true"]')) return;
+      e.preventDefault(); e.stopPropagation();
+      var t = e.target.closest('[data-cid]');
+      if (!t || t.closest('.bg')) return;
+      document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); });
+      t.classList.add('pw-picked');
+      picked = {cid: t.getAttribute('data-cid'), label: labelOf(t)};
+      renderFb();
+      // 글자만 있는 요소는 그 자리에서 고친다
+      if (!t.querySelector('[data-cid], input, svg, i') && (t.innerText || '').trim()) editText(t);
+      return;
+    }
+    if (e.target.closest('input')) return;
+    var el = e.target.closest('[data-go], [data-back]');
+    if (!el || el.closest('.bg')) return;
+    e.preventDefault();
+    if (el.hasAttribute('data-go')) show(el.getAttribute('data-go')); else back();
   });
+  document.querySelectorAll('.pw-list a').forEach(function(a){
+    a.addEventListener('click', function(){ hist = []; show(a.getAttribute('data-to')); });
+  });
+  document.getElementById('pw-back').addEventListener('click', back);
+  document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
   var panel = document.querySelector('.pw-desc');
   panel.addEventListener('click', function(e){
     var b = e.target.closest('[data-view]');
     if (b){ view = b.getAttribute('data-view'); desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
     if (e.target.id === 'pw-copy'){ copyText(data[cur].yaml); e.target.textContent = '복사했어요'; }
-    if (e.target.id === 'pw-pick'){ pick = !pick; document.body.classList.toggle('pw-picking', pick); renderFb(); }
-    if (e.target.id === 'pw-unpick'){ picked = null; renderFb(); }
+    if (e.target.id === 'pw-unpick'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); renderFb(); }
     if (e.target.id === 'pw-fbsend'){
       var t = document.getElementById('pw-fbtext'), text = t.value.trim(); if (!text) return;
       t.value = '';
@@ -729,6 +748,7 @@ _SHELL_JS = """
   if (hash[1] === 'dev') view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
   loadFb();
+  if (served) document.querySelector('.pw-mode').style.display = '';
   if (served) setInterval(function(){
     var a = document.activeElement;
     if (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable)) return;
@@ -739,7 +759,7 @@ _SHELL_JS = """
 """
 
 
-def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str) -> str:
+def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "") -> str:
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
     order = sorted(screens, key=lambda s: s.id)
@@ -775,7 +795,9 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
             f'<body class="pw"><nav class="pw-list"><div class="pw-title">{_t(title)}</div>'
             f'<div class="pw-sub">기획안 초안 · 디자인 시안이 아니에요. 개발 명세는 같은 폴더의 개발명세.md</div>{links}</nav>'
             f'<div class="pw-stage"><div class="pw-bar"><button id="pw-home">처음으로</button>'
-            f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label><span id="pw-fbcount"></span></div>'
+            f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label>'
+            f'<span class="pw-mode" style="display:none"><button data-mode="play" class="on">눌러 보기</button><button data-mode="edit">고치기</button></span>'
+            f'<span id="pw-ver">{_t(version)}</span></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
             f'<script type="application/json" id="pw-data">{payload}</script>{_SHELL_JS}</body></html>')
 
@@ -806,7 +828,9 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
 
     out = proto_path(task_dir)
     out.parent.mkdir(parents=True, exist_ok=True)
-    out.write_text(bundle(screens, by_id, css, task_title(task_dir)), encoding="utf-8")
+    import datetime as _dt
+    version = f"만든 시각 {_dt.datetime.now():%Y.%m.%d %H:%M}"
+    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version), encoding="utf-8")
     written = [out]
 
     browser = find_browser() if capture else None
