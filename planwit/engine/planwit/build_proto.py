@@ -516,6 +516,16 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-dedit { width: 100%; min-height: 90px; font: inherit; font-size: 12px; border: 1px solid #2f6fed; border-radius: 6px; padding: 6px; }
 .pw-desc .note { margin-top: 14px; color: #4a5160; white-space: pre-line; }
 .pw-draft { font-size: 11px; color: #8a8f98; }
+.pw-doclink { font-weight: 700; margin-bottom: 8px; border: 1px solid #e3e5e8; }
+.pw-doc { grid-column: 2 / 4; grid-row: 1; overflow: auto; background: #fff; padding: 28px 40px; }
+body.pw-docmode .pw-stage, body.pw-docmode .pw-desc { display: none; }
+.pw-docin { max-width: 860px; font-size: 14px; line-height: 1.65; color: #1b1d21; }
+.pw-docin h2 { font-size: 20px; margin: 4px 0 12px; } .pw-docin h3 { font-size: 16px; margin: 22px 0 8px; }
+.pw-docin table { width: 100%; border-collapse: collapse; margin: 8px 0; font-size: 13px; }
+.pw-docin th { background: #f5f6f8; text-align: left; } .pw-docin th, .pw-docin td { border: 1px solid #e3e5e8; padding: 7px 9px; vertical-align: top; }
+.pw-docin blockquote { border-left: 3px solid #2f6fed; background: #f0f4ff; margin: 8px 0; padding: 8px 12px; color: #2f4fa8; }
+.pw-docin ul { padding-left: 20px; } .pw-docin p { margin: 6px 0; }
+.pw-docin td:first-child { white-space: nowrap; }
 .pw-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
 .pw-tabs button { font: inherit; font-size: 13px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
 .pw-tabs button.on { background: #2f3441; color: #fff; border-color: #2f3441; }
@@ -824,7 +834,13 @@ _SHELL_JS = """
     if (el.hasAttribute('data-go')) show(el.getAttribute('data-go')); else back();
   });
   document.querySelectorAll('.pw-list a').forEach(function(a){
-    a.addEventListener('click', function(){ hist = []; show(a.getAttribute('data-to')); });
+    a.addEventListener('click', function(){
+      var doc = a.hasAttribute('data-doc');
+      document.body.classList.toggle('pw-docmode', doc);
+      var d = document.getElementById('pw-doc'); if (d) d.style.display = doc ? 'block' : 'none';
+      document.querySelectorAll('.pw-list a').forEach(function(x){ x.classList.toggle('on', x === a); });
+      if (!doc){ hist = []; show(a.getAttribute('data-to')); }
+    });
   });
   document.getElementById('pw-back').addEventListener('click', back);
   document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
@@ -901,14 +917,65 @@ _SHELL_JS = """
 """
 
 
+def md_to_html(md: str) -> str:
+    import re as _re
+
+    def inline(t: str) -> str:
+        t = _t(t)
+        t = _re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
+        t = _re.sub(r"\[([^\]]+)\]\((https?://[^)\s]+)\)", r'<a href="\2" target="_blank">\1</a>', t)
+        return t
+
+    out, table, lst = [], [], []
+
+    def flush():
+        if table:
+            rows = [r for r in table if not _re.fullmatch(r"\|[\s:|-]+\|", r.strip())]
+            cells = [[c.strip() for c in r.strip().strip("|").split("|")] for r in rows]
+            h = "<table><tr>" + "".join(f"<th>{inline(c)}</th>" for c in cells[0]) + "</tr>"
+            h += "".join("<tr>" + "".join(f"<td>{inline(c)}</td>" for c in r) + "</tr>" for r in cells[1:])
+            out.append(h + "</table>")
+            table.clear()
+        if lst:
+            out.append("<ul>" + "".join(f"<li>{inline(i)}</li>" for i in lst) + "</ul>")
+            lst.clear()
+
+    for line in md.splitlines():
+        st = line.strip()
+        if st.startswith("|"):
+            if lst:
+                flush()
+            table.append(st)
+            continue
+        if st.startswith("- "):
+            if table:
+                flush()
+            lst.append(st[2:])
+            continue
+        flush()
+        if not st:
+            continue
+        m = _re.match(r"^(#{1,4})\s+(.*)$", st)
+        if m:
+            n = min(len(m[1]) + 1, 4)
+            out.append(f"<h{n}>{inline(m[2])}</h{n}>")
+        elif st.startswith(">"):
+            out.append(f"<blockquote>{inline(st.lstrip('> ').strip())}</blockquote>")
+        else:
+            out.append(f"<p>{inline(st)}</p>")
+    flush()
+    return "".join(out)
+
+
 def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "",
-           figma: str = "", dev_ready: bool = False, port: int = 0) -> str:
+           figma: str = "", dev_ready: bool = False, port: int = 0, direction: str = "") -> str:
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
     order = sorted(screens, key=lambda s: s.id)
     sections = "".join(f'<section class="scr" id="{_t(s.id)}">{screen_markup(s, by_id, nav)}</section>'
                        for s in order)
-    links = "".join(
+    doc_link = '<a data-doc="1" class="pw-doclink">방향 정의</a>' if direction else ""
+    links = doc_link + "".join(
         f'<a data-to="{_t(s.id)}" class="{"child" if _parent_id(s.id) else ""}"><span class="id">{_t(s.id)}</span>'
         f'{_t(s.name)}</a>' for s in order)
     from .build_dev import screen_spec, to_yaml
@@ -947,6 +1014,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
             f'<label><input type="checkbox" id="pw-marks" checked>번호</label><span class="grow"></span><span id="pw-applybox"></span></div>'
             f'<div class="pw-edit-tip" id="pw-tip"></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
+            f'<div class="pw-doc" id="pw-doc" style="display:none"><div class="pw-docin">{md_to_html(direction)}</div></div>'
             f'<script type="application/json" id="pw-data">{payload}</script>{_SHELL_JS}</body></html>')
 
 
@@ -981,8 +1049,13 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     from .build_dev import figma_link
     dev_ready = paths.is_service(task_dir) or (paths.output_of(task_dir) / paths.DEV_SPEC).is_file()
     from .feedback import stable_port
+    direction = ""
+    if not paths.is_service(task_dir):
+        found = sorted(paths.docs(task_dir).glob("*방향정의*.md"))
+        if found:
+            direction = found[0].read_text(encoding="utf-8")
     out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir), dev_ready,
-                          stable_port(task_dir)), encoding="utf-8")
+                          stable_port(task_dir), direction), encoding="utf-8")
     written = [out]
 
     browser = find_browser() if capture else None
