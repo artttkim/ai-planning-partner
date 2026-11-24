@@ -603,19 +603,32 @@ _SHELL_JS = """
   }
   // ---------- 피드백 (serve로 열었을 때) ----------
   var served = location.protocol.indexOf('http') === 0, fb = [], picked = null, mode = 'play';
+  var serverUp = false, planVer = null, requested = false;
+  if (!served && data.__port__){
+    fetch('http://127.0.0.1:' + data.__port__ + '/api/ping').then(function(r){ return r.json(); })
+      .then(function(){ serverUp = true; renderFb(); }).catch(function(){});
+  }
   function post(url, d){
     return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(function(r){ return r.json(); });
   }
   function loadFb(){
     if (!served) return;
-    fetch('/api/feedback').then(function(r){ return r.json(); }).then(function(d){ fb = d.items || []; renderFb(); });
+    fetch('/api/feedback').then(function(r){ return r.json(); }).then(function(d){
+      fb = d.items || []; requested = d.requested;
+      if (planVer === null) planVer = d.version;
+      else if (d.version !== planVer){ location.reload(); return; }  // 기획안이 다시 만들어졌다: 보던 화면 그대로 새로 고친다
+      renderFb();
+    });
   }
   function renderFb(){
     var box = document.getElementById('pw-fb'); if (!box) return;
     var old = document.getElementById('pw-fbtext'), keep = old ? old.value : '', focused = document.activeElement === old;
     var h = '<div class="pw-fb-h">피드백</div>';
     if (!served){
-      box.innerHTML = h + '<div class="pw-sub">Claude에게 "기획안 열어 줘"라고 해서 연 기획안에서 피드백을 남길 수 있어요.</div>';
+      var live = 'http://127.0.0.1:' + data.__port__ + '/#' + cur;
+      box.innerHTML = h + (serverUp
+        ? '<div class="pw-hint">피드백은 여기서 남길 수 있어요: <a href="' + live + '">피드백 기획안 열기 →</a></div>'
+        : '<div class="pw-sub">피드백을 남기려면 Claude에게 "기획안 열어 줘"라고 말해 주세요. 피드백 기획안이 따로 열려요.</div>');
       return;
     }
     if (mode === 'edit') h += '<div class="pw-hint">고치기: 화면의 글자를 누르면 바로 고쳐져요. 다른 요소를 누르면 그 요소에 메모를 남겨요.</div>';
@@ -623,6 +636,9 @@ _SHELL_JS = """
     h += '<div class="row2"><span class="pw-chip">' + (picked ? '요소: ' + esc(picked.label) + ' <b id="pw-unpick">×</b>' : '이 화면 전체') + '</span></div>';
     h += '<textarea id="pw-fbtext" placeholder="이 화면에서 바꿀 점을 그냥 적어 주세요. 예: 이 토글은 반복 화면 안으로"></textarea>';
     h += '<div class="row2"><button class="main" id="pw-fbsend">남기기</button></div>';
+    var waiting = fb.filter(function(i){ return i.status === '대기'; }).length;
+    if (requested) h += '<div class="pw-hint" style="margin-top:8px">반영 중이에요. 다 되면 기획안이 저절로 새로 고쳐져요.</div>';
+    else if (waiting) h += '<div class="row2" style="margin-top:8px"><button class="main" id="pw-apply">남긴 피드백 지금 반영해 줘</button></div>';
     fb.filter(function(i){ return i.screen === cur; }).reverse().forEach(function(i){
       h += '<div class="pw-fbi"><span class="st s' + esc(i.status) + '">' + esc(i.status) + '</span>' +
            (i.label ? '<b>' + esc(i.label) + '</b> ' : '') +
@@ -689,7 +705,8 @@ _SHELL_JS = """
     el.addEventListener('keydown', function(k){ if (k.key === 'Enter'){ k.preventDefault(); el.blur(); } if (k.key === 'Escape'){ el.innerText = before; el.blur(); } });
   }
   function setMode(m){
-    mode = m; document.body.classList.toggle('pw-editing', m === 'edit');
+    mode = m;
+    try { sessionStorage.setItem('pw-mode', m); } catch (e) {} document.body.classList.toggle('pw-editing', m === 'edit');
     document.querySelectorAll('.pw-mode button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); });
     if (m === 'play'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); }
     renderFb();
@@ -725,6 +742,7 @@ _SHELL_JS = """
     var b = e.target.closest('[data-view]');
     if (b){ view = b.getAttribute('data-view'); desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
     if (e.target.id === 'pw-copy'){ copyText(data[cur].yaml); e.target.textContent = '복사했어요'; }
+    if (e.target.id === 'pw-apply'){ post('/api/request', {}).then(loadFb); }
     if (e.target.id === 'pw-unpick'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); renderFb(); }
     if (e.target.id === 'pw-fbsend'){
       var t = document.getElementById('pw-fbtext'), text = t.value.trim(); if (!text) return;
@@ -748,19 +766,22 @@ _SHELL_JS = """
   if (hash[1] === 'dev' && data.__dev__) view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
   loadFb();
-  if (served) document.querySelector('.pw-mode').style.display = '';
+  if (served){
+    document.querySelector('.pw-mode').style.display = '';
+    try { if (sessionStorage.getItem('pw-mode') === 'edit') setMode('edit'); } catch (e) {}
+  }
   if (served) setInterval(function(){
     var a = document.activeElement;
     if (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable)) return;
     loadFb();
-  }, 15000);
+  }, 3000);
 })();
 </script>
 """
 
 
 def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "",
-           figma: str = "", dev_ready: bool = False) -> str:
+           figma: str = "", dev_ready: bool = False, port: int = 0) -> str:
     """dev_ready: 개발에 전달한 뒤(개발명세.md가 있음)에만 개발 보기를 보여 준다."""
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
@@ -792,6 +813,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
     data["__start__"] = order[0].id
     data["__figma__"] = figma
     data["__dev__"] = dev_ready
+    data["__port__"] = port
     data["__dev__"] = dev_ready
     data["__dev__"] = dev_ready
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
@@ -838,8 +860,9 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     version = f"만든 시각 {_dt.datetime.now():%Y.%m.%d %H:%M}"
     from .build_dev import figma_link
     dev_ready = paths.is_service(task_dir) or (paths.output_of(task_dir) / paths.DEV_SPEC).is_file()
-    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir), dev_ready),
-                   encoding="utf-8")
+    from .feedback import stable_port
+    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir), dev_ready,
+                          stable_port(task_dir)), encoding="utf-8")
     written = [out]
 
     browser = find_browser() if capture else None

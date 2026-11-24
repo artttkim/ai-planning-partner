@@ -124,6 +124,13 @@ def feedback_cmd(task: str, action: str, fid: str | None, status: str | None, no
             extra = f" | 앞서 플랜윗 질문: {i['answer']} | 기획자 답: {i['reply']}" if i.get("reply") else ""
             print(f"{i['id']} | {where} | {body}{extra}")
         return 0
+    if action == "wait":
+        # 기획자가 기획안에서 '지금 반영해 줘'를 누를 때까지 기다린다 (백그라운드로 실행)
+        if feedback.wait_request(task_dir):
+            print("반영 요청이 왔어요. 새 피드백:")
+            return feedback_cmd(task, "list", None, None, "")
+        print("기다리는 시간이 끝났어요.")
+        return 0
     if action == "set":
         try:
             item = feedback.set_status(task_dir, fid or "", status or "", note)
@@ -278,7 +285,7 @@ def main(argv=None) -> int:
     sv.add_argument("--no-open", action="store_true")
     fbp = sub.add_parser("feedback", help="기획안 피드백 보기(list)와 상태 바꾸기(set)")
     fbp.add_argument("task")
-    fbp.add_argument("action", choices=["list", "set"])
+    fbp.add_argument("action", choices=["list", "set", "wait"])
     fbp.add_argument("id", nargs="?")
     fbp.add_argument("status", nargs="?", help="반영함, 질문, 닫힘")
     fbp.add_argument("--note", default="", help="기획자에게 보일 플랜윗의 답이나 질문")

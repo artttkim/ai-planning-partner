@@ -291,3 +291,18 @@ def test_cli_build_all_makes_plan_and_dev_view_on_request(workspace):
     assert paths.dev_spec(task).is_file()
     assert '"__dev__": true' in paths.plan(task).read_text(encoding="utf-8")
 
+
+
+def test_text_feedback_applies_to_source(workspace):
+    """문구 수정 피드백은 화면 원본의 label에 바로 반영되고, 글자가 맞지 않으면 하지 않는다."""
+    from planwit import feedback
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    s = next(x for x in load_screens(task) if x.id == "SCR-010")
+    leaf = next(c for top in s.components for c in top.walk() if c.label and not c.children)
+    ok = feedback.apply_text(task, {"kind": "문구", "screen": "SCR-010", "cid": leaf.id, "before": leaf.label, "after": "새 문구, 쉼표: 포함"})
+    assert ok
+    s2 = next(x for x in load_screens(task) if x.id == "SCR-010")
+    assert next(c for top in s2.components for c in top.walk() if c.id == leaf.id).label == "새 문구, 쉼표: 포함"
+    assert not feedback.apply_text(task, {"kind": "문구", "screen": "SCR-010", "cid": leaf.id, "before": "다른 글자", "after": "x"})
