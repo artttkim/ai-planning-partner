@@ -72,6 +72,15 @@ def screen_spec(s: Screen, links: dict[str, str] | None = None) -> dict:
     return data
 
 
+def figma_link(task_dir: Path) -> str:
+    """과제요약의 '- 피그마: <주소>' 줄. 없으면 빈 문자열."""
+    p = paths.summary(task_dir)
+    if not p.is_file():
+        return ""
+    m = re.search(r"^- 피그마:\s*(\S+)", p.read_text(encoding="utf-8"), re.M)
+    return m[1] if m else ""
+
+
 def to_yaml(data: dict) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=1000)
 
@@ -107,6 +116,7 @@ def build(task_dir: Path) -> list[Path]:
     by_id = {s.id: s for s in screens}
     nav = _Nav(screens)
     title = task_title(task_dir)
+    figma = figma_link(task_dir)
 
     lines = [
         f"# {title} · 개발 명세",
@@ -118,7 +128,9 @@ def build(task_dir: Path) -> list[Path]:
         "",
         "- ID: `SCR` 화면, `POL` 정책, `FR` 기능, `AC` 수용 기준, `TASK` 개발 태스크. 화면과 정책 번호는 서비스 전체에서 하나뿐이다.",
         "- 화면 구성은 위에서 아래 순서의 요소 트리다. `behavior`는 그 요소의 동작과 조건, `policy`는 따를 정책, `navigate`는 누르면 갈 화면이다.",
-        "- `changed: true`는 이번 과제에서 바뀌는 요소다. 디자인 값(색, 글꼴, 간격)은 디자인 시스템을 따른다.",
+        "- `changed: true`는 이번 과제에서 바뀌는 요소다.",
+        "- **이 명세는 동작 기준이다. 모양(색, 글꼴, 간격, 아이콘)은 피그마 디자인을 따른다.** 기획안의 화면 모양은 초안이다."
+        + (f" 피그마: {figma}" if figma else ""),
         "",
         "## 화면 목록",
         "",

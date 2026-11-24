@@ -592,7 +592,7 @@ _SHELL_JS = """
            (r.policy ? '<div class="pol">정책: ' + esc(r.policy) + '</div>' : '') +
            (r.navigate ? '<div class="go">' + esc(goText(r.navigate)) + '</div>' : '') + '</td></tr>';
     });
-    h += '</table><div class="pw-sub" style="margin-top:8px">* 이번 과제에서 바뀌는 요소. 줄에 마우스를 올리면 화면에서 위치를 보여 줘요.</div>';
+    h += '</table><div class="pw-sub" style="margin-top:8px">* 이번 과제에서 바뀌는 요소. 줄에 마우스를 올리면 화면에서 위치를 보여 줘요.<br>' + '동작은 이 명세, 모양(색·글꼴·간격·아이콘)은 피그마 디자인 기준이에요.' + (data.__figma__ ? ' <a href="' + esc(data.__figma__) + '" target="_blank">피그마 열기</a>' : '') + '</div>';
     h += '<div class="pw-code"><button id="pw-copy">이 화면 명세 복사 (YAML)</button><pre id="pw-yaml">' + esc(d.yaml) + '</pre></div>';
     return h;
   }
@@ -759,7 +759,8 @@ _SHELL_JS = """
 """
 
 
-def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "") -> str:
+def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "",
+           figma: str = "") -> str:
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
     order = sorted(screens, key=lambda s: s.id)
@@ -788,6 +789,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
                       "rows": [[d.no, d.item, d.text, d.policy] for d in s.descriptions],
                       "tree": flat(spec["components"]), "yaml": to_yaml(spec)}
     data["__start__"] = order[0].id
+    data["__figma__"] = figma
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{_t(title)} 기획안</title>'
@@ -830,7 +832,8 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     out.parent.mkdir(parents=True, exist_ok=True)
     import datetime as _dt
     version = f"만든 시각 {_dt.datetime.now():%Y.%m.%d %H:%M}"
-    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version), encoding="utf-8")
+    from .build_dev import figma_link
+    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir)), encoding="utf-8")
     written = [out]
 
     browser = find_browser() if capture else None
