@@ -11,7 +11,7 @@
       "name": "planwit",
       "source": "./planwit",
       "description": "PRD를 받아 상세 기획 산출물을 만들고 검수받는 상세 기획 도우미",
-      "version": "0.3.7"
+      "version": "0.3.8"
     }
   ]
 }

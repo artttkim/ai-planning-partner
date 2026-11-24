@@ -698,7 +698,7 @@ _SHELL_JS = """
   function tabs(){
     var n = fbCount(cur);
     function b(v, label){ return '<button data-view="' + v + '" class="' + (view === v ? 'on' : '') + '">' + label + '</button>'; }
-    return '<div class="pw-tabs">' + b('desc', '설명') + b('fb', '의견' + (n ? ' ' + n : '')) + (data.__dev__ ? b('dev', '개발 보기') : '') + '</div>';
+    return '<div class="pw-tabs">' + b('desc', '설명') + b('fb', '의견' + (n ? ' ' + n : '')) + '</div>';
   }
   function desc(id){
     if (view === 'dev' && !data.__dev__) view = 'desc';
@@ -849,7 +849,6 @@ _SHELL_JS = """
 
 def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "",
            figma: str = "", dev_ready: bool = False, port: int = 0) -> str:
-    """dev_ready: 개발에 전달한 뒤(개발명세.md가 있음)에만 개발 보기를 보여 준다."""
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
     order = sorted(screens, key=lambda s: s.id)
@@ -876,10 +875,10 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
         spec = screen_spec(s, links_with_nav(s, by_id, nav))
         data[s.id] = {"name": s.name, "status": s.status, "path": s.path, "note": s.note,
                       "rows": [[d.no, d.item, d.text, d.policy] for d in s.descriptions],
-                      "tree": flat(spec["components"]), "yaml": to_yaml(spec)}
+                      }
     data["__start__"] = order[0].id
     data["__figma__"] = figma
-    data["__dev__"] = dev_ready
+    data["__dev__"] = False  # 개발 보기는 두지 않는다. 개발자는 기획안과 개발명세.md를 본다
     data["__port__"] = port
     data["__dev__"] = dev_ready
     data["__dev__"] = dev_ready
@@ -898,7 +897,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
 
 
 def build(task_dir: Path, capture: bool = True) -> list[Path]:
-    """기획안.html(프로토타입 + 설명 + 개발 보기) 하나를 만들고, capture=True면 화면마다 캡처와 요소 위치를 저장한다.
+    """기획안.html(프로토타입 + 설명 + 의견) 하나를 만들고, capture=True면 화면마다 캡처와 요소 위치를 저장한다.
 
     캡처는 화면 설계서(.pptx)를 만들 때만 필요하다."""
     from .screens import task_title

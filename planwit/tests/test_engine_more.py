@@ -279,7 +279,7 @@ def test_services_are_separate_and_old_layout_moves(tmp_path):
 
 
 def test_cli_build_all_makes_plan_and_dev_view_on_request(workspace):
-    """build all은 기획안만, build dev를 한 번 하면 그 뒤로 개발 명세와 개발 보기가 함께 갱신된다."""
+    """build all은 기획안만, build dev를 한 번 하면 그 뒤로 개발 명세도 함께 갱신된다."""
     from planwit import cli, paths
 
     task = _task(workspace)
@@ -289,7 +289,6 @@ def test_cli_build_all_makes_plan_and_dev_view_on_request(workspace):
     assert cli.main(["build", "dev", str(task)]) == 0
     assert cli.main(["build", "all", str(task)]) == 0
     assert paths.dev_spec(task).is_file()
-    assert '"__dev__": true' in paths.plan(task).read_text(encoding="utf-8")
 
 
 

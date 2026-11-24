@@ -28,7 +28,7 @@ POLICY_RE = re.compile(r"POL-\d+")
 
 
 def screen_spec(s: Screen, links: dict[str, str] | None = None) -> dict:
-    """화면 하나의 개발 명세. 기획안의 개발 보기와 개발명세.md가 같은 내용을 쓴다."""
+    """화면 하나의 개발 명세. 개발명세.md에 쓴다."""
     links = links or {}
     by_marker = {str(d.no): d for d in s.descriptions}
 
