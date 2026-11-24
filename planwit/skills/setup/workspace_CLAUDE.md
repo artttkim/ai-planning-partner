@@ -51,6 +51,8 @@
 | 파일을 다시 만들어 달라고 함 | `planwit:export` |
 | "현황", "어디까지 했어?" | `planwit:status` |
 | "기획안 열어 줘", "피드백 반영해 줘", 새 피드백 알림 | `planwit:feedback` |
+| "개발 보기 뽑아 줘", "개발 명세 만들어 줘" | `planwit:export` |
+| "개발에 전달해 줘", "개발 넘길 준비해 줘" | `planwit:handoff` |
 | "기준본에 합쳐 줘", "과제 합치기" | `planwit:merge` |
 | "피그마로 보내 줘", "디자인 파일로 만들어 줘" | `planwit:figma` |
 

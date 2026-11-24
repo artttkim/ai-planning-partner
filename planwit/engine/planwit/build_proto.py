@@ -637,7 +637,7 @@ _SHELL_JS = """
   }
   function desc(id){
     var d = data[id], h = '<div class="pw-tabs"><button data-view="desc" class="' + (view === 'desc' ? 'on' : '') + '">설명</button>' +
-      '<button data-view="dev" class="' + (view === 'dev' ? 'on' : '') + '">개발 보기</button></div>';
+      (data.__dev__ ? '<button data-view="dev" class="' + (view === 'dev' ? 'on' : '') + '">개발 보기</button>' : '') + '</div>';
     h += '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
     h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + '</div>';
     if (view === 'dev'){
@@ -745,7 +745,7 @@ _SHELL_JS = """
   document.getElementById('pw-marks').addEventListener('change', function(e){ document.body.classList.toggle('no-marks', !e.target.checked); });
   window.addEventListener('resize', function(){ var s = document.querySelector('.scr.on'); if (s) marks(s); });
   var hash = location.hash.slice(1).split('~'), start = hash[0];
-  if (hash[1] === 'dev') view = 'dev';
+  if (hash[1] === 'dev' && data.__dev__) view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
   loadFb();
   if (served) document.querySelector('.pw-mode').style.display = '';
@@ -760,7 +760,8 @@ _SHELL_JS = """
 
 
 def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str, version: str = "",
-           figma: str = "") -> str:
+           figma: str = "", dev_ready: bool = False) -> str:
+    """dev_ready: 개발에 전달한 뒤(개발명세.md가 있음)에만 개발 보기를 보여 준다."""
     """모든 화면을 파일 하나에 담은 프로토타입. 화면 사이를 눌러 이동하고, 번호와 설명을 함께 본다."""
     nav = _Nav(screens)
     order = sorted(screens, key=lambda s: s.id)
@@ -790,12 +791,15 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
                       "tree": flat(spec["components"]), "yaml": to_yaml(spec)}
     data["__start__"] = order[0].id
     data["__figma__"] = figma
+    data["__dev__"] = dev_ready
+    data["__dev__"] = dev_ready
+    data["__dev__"] = dev_ready
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{_t(title)} 기획안</title>'
             f'<style>{css}\n{_SHELL_CSS}</style></head>'
             f'<body class="pw"><nav class="pw-list"><div class="pw-title">{_t(title)}</div>'
-            f'<div class="pw-sub">기획안 초안 · 디자인 시안이 아니에요. 개발 명세는 같은 폴더의 개발명세.md</div>{links}</nav>'
+            f'<div class="pw-sub">기획안 · 화면 모양은 초안이에요 (디자인은 피그마)</div>{links}</nav>'
             f'<div class="pw-stage"><div class="pw-bar"><button id="pw-home">처음으로</button>'
             f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label>'
             f'<span class="pw-mode" style="display:none"><button data-mode="play" class="on">눌러 보기</button><button data-mode="edit">고치기</button></span>'
@@ -833,7 +837,9 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     import datetime as _dt
     version = f"만든 시각 {_dt.datetime.now():%Y.%m.%d %H:%M}"
     from .build_dev import figma_link
-    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir)), encoding="utf-8")
+    dev_ready = paths.is_service(task_dir) or (paths.output_of(task_dir) / paths.DEV_SPEC).is_file()
+    out.write_text(bundle(screens, by_id, css, task_title(task_dir), version, figma_link(task_dir), dev_ready),
+                   encoding="utf-8")
     written = [out]
 
     browser = find_browser() if capture else None

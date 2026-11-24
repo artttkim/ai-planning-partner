@@ -81,6 +81,24 @@ def figma_link(task_dir: Path) -> str:
     return m[1] if m else ""
 
 
+def _summary_text(task_dir: Path) -> str:
+    p = paths.summary(task_dir)
+    return p.read_text(encoding="utf-8") if p.is_file() else ""
+
+
+def handoff_version(task_dir: Path) -> str:
+    """과제요약의 '- 전달 버전: v1.0 (YYYY.MM.DD)' 줄."""
+    m = re.search(r"^- 전달 버전:\s*(.+)$", _summary_text(task_dir), re.M)
+    return m[1].strip() if m else ""
+
+
+def _history(task_dir: Path) -> list[str]:
+    """과제요약의 변경 이력 표."""
+    text = _summary_text(task_dir)
+    m = re.search(r"^## 변경 이력\s*\n(.*?)(?=^## |\Z)", text, re.M | re.S)
+    return [l for l in m[1].strip().splitlines() if l.startswith("|")] if m else []
+
+
 def to_yaml(data: dict) -> str:
     return yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=1000)
 
@@ -119,7 +137,7 @@ def build(task_dir: Path) -> list[Path]:
     figma = figma_link(task_dir)
 
     lines = [
-        f"# {title} · 개발 명세",
+        f"# {title} · 개발 명세" + (f" · {handoff_version(task_dir)}" if handoff_version(task_dir) else ""),
         "",
         "> 플랜윗이 기획 원본에서 만든 파일이다. 직접 고치지 말고 기획 원본을 고친 뒤 다시 만든다.",
         "> 화면을 눌러 보려면 같은 폴더의 기획안.html을 연다.",
@@ -149,6 +167,9 @@ def build(task_dir: Path) -> list[Path]:
             lines.append("")
     for doc in _docs(task_dir):
         lines += [_demote(doc.read_text(encoding="utf-8")), ""]
+    history = _history(task_dir)
+    if history:
+        lines += ["## 변경 이력", "", *history, ""]
 
     out = paths.output_of(task_dir) / paths.DEV_SPEC
     out.parent.mkdir(parents=True, exist_ok=True)

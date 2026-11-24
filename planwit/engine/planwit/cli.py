@@ -55,7 +55,7 @@ def _look(task_dir: Path, look: str | None) -> str:
 
 
 def build(kind: str, task: str, version: str, look: str | None = None) -> int:
-    from . import build_dev, build_pptx, build_proto, snapshot
+    from . import build_dev, build_pptx, build_proto, paths, snapshot
 
     task_dir = Path(task).resolve()
     look = _look(task_dir, look)
@@ -70,7 +70,7 @@ def build(kind: str, task: str, version: str, look: str | None = None) -> int:
             out = build_pptx.build(task_dir, version=version, look=look)
             snapshot.record(task_dir, out)
             print(f"생성: {out.relative_to(task_dir).as_posix()}")
-        if kind in ("dev", "all"):
+        if kind == "dev" or (kind == "all" and paths.dev_spec(task_dir).is_file()):
             for out in build_dev.build(task_dir):
                 print(f"생성: {out.relative_to(task_dir).as_posix()}")
     except PermissionError as e:
