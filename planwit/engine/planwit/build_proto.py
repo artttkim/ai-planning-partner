@@ -86,6 +86,7 @@ class _Html:
         self.nav = nav
         self.sid = screen_id
         self.in_overlay = False
+        self.has_search = False
 
     def _go(self, target: str | None) -> str:
         return f' data-go="{target}"' if target and target != self.sid else ""
@@ -255,7 +256,9 @@ class _Html:
         return f'<div {_attrs(c, "loading")}><i class="spin"></i></div>'
 
     def _빈화면(self, c):
-        return f'<div {_attrs(c, "empty")}><div class="art"></div>{self.kids(c) or "<p>" + _t(c.label) + "</p>"}</div>'
+        # 검색창이 있는 화면의 빈화면은 "검색 결과 없음"이다: 평소에는 숨기고, 검색 결과가 없을 때 보인다
+        cls = "empty pw-search-empty" if self.has_search else "empty"
+        return f'<div {_attrs(c, cls)}><div class="art"></div>{self.kids(c) or "<p>" + _t(c.label) + "</p>"}</div>'
 
     def _기타(self, c):
         return f'<div {_attrs(c, "box")}>{_t(c.label)}{self.kids(c)}</div>'
@@ -334,6 +337,7 @@ def _parent_id(screen_id: str) -> str | None:
 
 def _body(screen: Screen, links: dict[str, str], nav: "_Nav | None" = None) -> str:
     h = _Html(links, nav, screen.id)
+    h.has_search = any(_norm(c.type) == "검색창" for c in _all(screen))
     normal = [c for c in screen.components if _norm(c.type) not in OVERLAYS + ("하단탭바", "플로팅버튼")]
     tabbar = [c for c in screen.components if _norm(c.type) == "하단탭바"]
     fab = [c for c in screen.components if _norm(c.type) == "플로팅버튼"]
@@ -761,7 +765,28 @@ _SHELL_JS = """
     renderFb();
   }
   document.querySelectorAll('.pw-mode button').forEach(function(b){ b.addEventListener('click', function(){ setMode(b.getAttribute('data-mode')); }); });
+  // 둘러보기: 검색창에 입력하면 같은 화면의 목록을 거르고, 맞는 것이 없으면 "검색 결과 없음"을 보여 준다
+  function searchFilter(inp){
+    var scr = inp.closest('.screen'), q = inp.value.trim().toLowerCase(), any = false;
+    scr.querySelectorAll('.opt, .list > .group.item, .list > .row, .list > .card').forEach(function(el){
+      var ok = !q || (el.innerText || '').toLowerCase().indexOf(q) >= 0;
+      el.style.display = ok ? '' : 'none'; if (ok) any = true;
+    });
+    scr.querySelectorAll('.pw-search-empty').forEach(function(el){ el.classList.toggle('show', !!q && !any); });
+    var sec = document.getElementById(cur); if (sec) marks(sec);
+  }
+  phone.addEventListener('input', function(e){
+    if (mode === 'play' && e.target.closest('.input.search')) searchFilter(e.target);
+  });
   phone.addEventListener('click', function(e){
+    if (mode === 'play'){
+      var clr = e.target.closest('.pw-search-empty .btn');
+      if (clr){
+        var inp = clr.closest('.screen').querySelector('.input.search input');
+        if (inp){ inp.value = ''; searchFilter(inp); inp.focus(); }
+        return;
+      }
+    }
     if (mode === 'edit'){
       if (e.target.closest('[contenteditable="true"]')) return;
       e.preventDefault(); e.stopPropagation();

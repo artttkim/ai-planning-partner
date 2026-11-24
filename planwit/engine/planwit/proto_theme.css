@@ -106,5 +106,8 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 .loading { display: flex; justify-content: center; padding: 24px 0; }
 .spin { width: 28px; height: 28px; border-radius: 50%; border: 3px solid var(--line); border-top-color: var(--primary); display: inline-block; }
 .empty { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 32px 0; text-align: center; color: var(--sub); }
+.pw-search-empty { display: none; }
+.pw-search-empty.show { display: flex; }
+.empty .btn.small { align-self: center; }
 .empty .art { width: 120px; height: 120px; border-radius: 50%; background: var(--surface); }
 .row .input { flex: 1; }
