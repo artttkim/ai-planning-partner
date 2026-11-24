@@ -319,3 +319,16 @@ def test_feedback_edit_delete_only_before_applied(tmp_path):
     assert feedback.edit(task, b["id"], "x") is None and not feedback.delete(task, b["id"])
     assert feedback.delete(task, a["id"])
     assert [i["id"] for i in feedback.load(task)] == [b["id"]]
+
+
+def test_description_edit_writes_source(workspace):
+    from planwit import feedback
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    s = next(x for x in load_screens(task) if x.descriptions)
+    no = s.descriptions[0].no
+    assert feedback.apply_desc(task, s.id, no, "노출: 항상 보인다\n동작: 누르면 SCR-020으로 이동한다 | 바로")
+    s2 = next(x for x in load_screens(task) if x.id == s.id)
+    assert s2.descriptions[0].text == "노출: 항상 보인다<br>동작: 누르면 SCR-020으로 이동한다 / 바로"
+    assert not feedback.apply_desc(task, s.id, "99", "x")

@@ -211,6 +211,44 @@ def apply_text(task_dir: Path, item: dict) -> bool:
     return True
 
 
+def apply_desc(task_dir: Path, screen_id: str, no: str, text: str) -> bool:
+    """화면 원본의 설명 표에서 번호 no 줄의 설명 칸을 text로 바꾼다. 줄바꿈은 <br>로 쓴다."""
+    import re
+
+    from .screens import find_screen_dir, parse_screen
+
+    try:
+        src = find_screen_dir(task_dir) / f"{screen_id}.md"
+    except FileNotFoundError:
+        return False
+    if not src.is_file():
+        return False
+    value = "<br>".join(l.strip() for l in str(text).replace("|", "/").splitlines() if l.strip())
+    if not value:
+        return False
+    original = src.read_text(encoding="utf-8")
+    lines = original.splitlines()
+    in_desc = False
+    for i, line in enumerate(lines):
+        if line.startswith("## "):
+            in_desc = line.strip() == "## 설명"
+            continue
+        if not in_desc or not line.strip().startswith("|"):
+            continue
+        cells = [c.strip() for c in line.strip().strip("|").split("|")]
+        if len(cells) >= 3 and cells[0] == str(no).strip():
+            cells[2] = value
+            lines[i] = "| " + " | ".join(cells) + " |"
+            src.write_text("\n".join(lines) + ("\n" if original.endswith("\n") else ""), encoding="utf-8")
+            try:
+                parse_screen(src)
+            except Exception:
+                src.write_text(original, encoding="utf-8")
+                return False
+            return True
+    return False
+
+
 def rebuild(task_dir: Path):
     """기획안을 다시 만든다. 개발 명세가 있으면 함께."""
     from . import build_dev, build_proto
@@ -311,6 +349,16 @@ def serve(task_dir: Path, port: int = 0, open_browser: bool = True, idle_hours: 
                             rebuild(task_dir)
                             item = set_status(task_dir, item["id"], "반영함", "문구를 바로 바꿨어요") or item
                 return self._json(item)
+            if self.path == "/api/desc":
+                with _build_lock:
+                    sid, no, text = str(data.get("screen", "")), str(data.get("no", "")), str(data.get("text", ""))
+                    before = str(data.get("before", ""))
+                    if not apply_desc(task_dir, sid, no, text):
+                        return self._json({"error": "설명을 찾지 못했어요"}, 409)
+                    rebuild(task_dir)
+                    item = add(task_dir, {"screen": sid, "label": f"설명 {no}", "kind": "문구", "before": before, "after": text})
+                    set_status(task_dir, item["id"], "반영함", "설명을 바로 고쳤어요")
+                return self._json({"ok": True})
             if self.path == "/api/request":
                 request_file(task_dir).parent.mkdir(parents=True, exist_ok=True)
                 request_file(task_dir).write_text(_now(), encoding="utf-8")

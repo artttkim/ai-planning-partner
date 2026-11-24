@@ -510,6 +510,10 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-desc td { border-bottom: 1px solid #eceef1; padding: 8px 6px; vertical-align: top; line-height: 1.5; }
 .pw-desc td.no span { display: inline-flex; width: 20px; height: 20px; border-radius: 50%; background: #e5484d; color: #fff; font-size: 11px; font-weight: 700; align-items: center; justify-content: center; }
 .pw-desc .pol { color: #8a8f98; font-size: 12px; margin-top: 2px; }
+.pw-sl { margin-bottom: 2px; }
+.pw-sl b { color: #2f4fa8; font-weight: 600; margin-right: 2px; }
+.pw-dlink { color: #2f6fed; cursor: pointer; font-size: 12px; }
+.pw-dedit { width: 100%; min-height: 90px; font: inherit; font-size: 12px; border: 1px solid #2f6fed; border-radius: 6px; padding: 6px; }
 .pw-desc .note { margin-top: 14px; color: #4a5160; white-space: pre-line; }
 .pw-draft { font-size: 11px; color: #8a8f98; }
 .pw-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
@@ -699,6 +703,14 @@ _SHELL_JS = """
     var nt = document.getElementById('pw-fbtext');
     if (nt){ nt.value = keep; if (focused) nt.focus(); }
   }
+  var editDesc = null;
+  function scriptHtml(t){
+    // 설명은 "노출: ..<br>동작: .." 형식. 줄을 나누고 항목 이름을 굵게
+    return String(t).split('<br>').map(function(line){
+      var m = line.match(/^(노출|내용|동작|규칙|예외)[ ]*:[ ]*(.*)$/);
+      return '<div class="pw-sl">' + (m ? '<b>' + esc(m[1]) + '</b> ' + esc(m[2]) : esc(line)) + '</div>';
+    }).join('');
+  }
   function fbCount(id){ return fb.filter(function(i){ return i.screen === id && i.status !== '닫힘'; }).length; }
   function tabs(){
     var n = fbCount(cur);
@@ -716,7 +728,11 @@ _SHELL_JS = """
     if (d.rows.length){
       h += '<table><tr><th>No</th><th>항목</th><th>설명</th></tr>';
       d.rows.forEach(function(r){
-        h += '<tr><td class="no"><span>' + esc(r[0]) + '</span></td><td>' + esc(r[1]) + '</td><td>' + esc(r[2]) +
+        var cell = editDesc === r[0]
+          ? '<textarea class="pw-dedit">' + esc(String(r[2]).split('<br>').join(String.fromCharCode(10))) + '</textarea>' +
+            '<div class="row2"><button class="pw-primary sm" data-dact="save" data-no="' + esc(r[0]) + '">저장</button><button class="sm" data-dact="cancel">취소</button></div>'
+          : scriptHtml(r[2]) + (served ? '<a class="pw-dlink" data-dact="edit" data-no="' + esc(r[0]) + '">수정</a>' : '');
+        h += '<tr><td class="no"><span>' + esc(r[0]) + '</span></td><td>' + esc(r[1]) + '</td><td>' + cell +
              (r[3] ? '<div class="pol">정책: ' + esc(r[3]) + '</div>' : '') + '</td></tr>';
       });
       h += '</table>';
@@ -817,6 +833,18 @@ _SHELL_JS = """
   });
   var panel = document.querySelector('.pw-desc');
   panel.addEventListener('click', function(e){
+    var dact = e.target.getAttribute && e.target.getAttribute('data-dact');
+    if (dact === 'edit'){ editDesc = e.target.getAttribute('data-no'); desc(cur); var ta0 = panel.querySelector('textarea.pw-dedit'); if (ta0) ta0.focus(); return; }
+    if (dact === 'cancel'){ editDesc = null; desc(cur); return; }
+    if (dact === 'save'){
+      var no = e.target.getAttribute('data-no'), ta1 = panel.querySelector('textarea.pw-dedit');
+      var row = data[cur].rows.filter(function(r){ return String(r[0]) === no; })[0];
+      var val = ta1 ? ta1.value.trim() : '';
+      editDesc = null;
+      if (val){ e.target.textContent = '저장 중…'; post('/api/desc', {screen: cur, no: no, text: val, before: row ? row[2] : ''}).then(loadFb); }
+      else desc(cur);
+      return;
+    }
     var act = e.target.getAttribute && e.target.getAttribute('data-act'), fid = e.target.getAttribute && e.target.getAttribute('data-id');
     if (act === 'edit'){ editingId = fid; renderFb(); return; }
     if (act === 'cancel'){ editingId = null; renderFb(); return; }
@@ -865,7 +893,7 @@ _SHELL_JS = """
   }
   if (served) setInterval(function(){
     var a = document.activeElement;
-    if (editingId || (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable))) return;
+    if (editingId || editDesc || (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable))) return;
     loadFb();
   }, 3000);
 })();

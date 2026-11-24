@@ -790,7 +790,7 @@ def _screen_slide(prs, screen: Screen, version: str, screens_by_id: dict[str, Sc
 
     rows = [["No", "항목", "설명"]]
     for d in screen.descriptions:
-        text = d.text + (f"\n정책: {d.policy}" if d.policy else "")
+        text = d.text.replace("<br>", "\n") + (f"\n정책: {d.policy}" if d.policy else "")
         rows.append([d.no, d.item, text])
     if screen.status == "참고" and len(rows) == 1:
         rows.append(["-", "참고 화면", "흐름 이해를 위한 화면이에요. 변경 없음."])
