@@ -332,3 +332,25 @@ def test_description_edit_writes_source(workspace):
     s2 = next(x for x in load_screens(task) if x.id == s.id)
     assert s2.descriptions[0].text == "노출: 항상 보인다<br>동작: 누르면 SCR-020으로 이동한다 / 바로"
     assert not feedback.apply_desc(task, s.id, "99", "x")
+
+
+def test_quality_gate_catches_missing_essentials(workspace):
+    """방향 정의의 빠진 장, 설명 없는 입력 요소, 모호한 말, 흐름에 없는 화면을 잡는다."""
+    from planwit import quality
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    summ = task / "00_과제요약.md"
+    summ.write_text(summ.read_text(encoding="utf-8") + "\n## 진행 단계\n\n| 순서 | 단계 | 상태 |\n|---|---|---|\n| 2 | 방향 정의 | 대기 |\n", encoding="utf-8")
+    docs = task / "2_기획문서"
+    (docs / "02_방향정의.md").write_text("# 방향 정의\n\n## 1. 한 문장\n\n## 2. 차별점\n", encoding="utf-8")
+    (docs / "03_유저플로우.md").write_text("SCR-010 → SCR-020\n", encoding="utf-8")
+    f = docs / "03_화면설계" / "SCR-020.md"
+    f.write_text(f.read_text(encoding="utf-8").replace("    marker: 2\n", "", 1).replace("| 2 | 휴대폰 번호 | 필수. 숫자만 10~11자리 | |\n", "")
+                 .replace("3분부터 줄어듦", "적절히 줄어듦"), encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    text = "\n".join(problems)
+    assert "'출시 발표문' 장이 없어요" in text and "'위험' 장이 없어요" in text
+    assert "c3)에 번호와 설명이 없어요" in text
+    assert "모호한 말('적절히')" in text
+    assert "SCR-030: 유저 플로우에 없는 화면" in text

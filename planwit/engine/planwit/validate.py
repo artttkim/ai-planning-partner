@@ -57,4 +57,6 @@ def check_all(task_dir: Path) -> tuple[list[str], list[str]]:
             for ref in re.findall(r"SCR-\d+(?:-P\d+)?", d.text):
                 if ref not in known:
                     problems.append(f"{s.id}: 설명 {d.no}이 가리키는 {ref} 화면이 없어요.")
-    return problems, notes
+    from . import quality
+    q_problems, q_notes = quality.check(task_dir, screens)
+    return problems + q_problems, notes + q_notes
