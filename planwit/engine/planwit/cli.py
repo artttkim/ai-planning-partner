@@ -60,12 +60,13 @@ def build(kind: str, task: str, version: str, look: str | None = None) -> int:
     task_dir = Path(task).resolve()
     look = _look(task_dir, look)
     try:
-        if kind == "proto" or (kind == "all" and look == "design"):
-            for out in build_proto.build(task_dir):
+        # all: 기획안.html과 개발명세.md. 화면 설계서(.pptx)는 pptx를 지정할 때만 만든다.
+        if kind in ("proto", "all") or (kind == "pptx" and look == "design"):
+            for out in build_proto.build(task_dir, capture=(kind in ("pptx", "proto"))):
                 if out.suffix == ".png":
                     continue
                 print(f"생성: {out.relative_to(task_dir).as_posix()}")
-        if kind in ("pptx", "all"):
+        if kind == "pptx":
             out = build_pptx.build(task_dir, version=version, look=look)
             snapshot.record(task_dir, out)
             print(f"생성: {out.relative_to(task_dir).as_posix()}")
@@ -84,7 +85,11 @@ def build(kind: str, task: str, version: str, look: str | None = None) -> int:
 def validate(task: str) -> int:
     from . import validate as v
 
-    problems = v.check(Path(task).resolve())
+    problems, notes = v.check_all(Path(task).resolve())
+    if notes:
+        print("확인할 것")
+        for n in notes:
+            print(f"- {n}")
     if not problems:
         print("ID 검사: 문제 없음")
         return 0
@@ -92,6 +97,48 @@ def validate(task: str) -> int:
     for p in problems:
         print(f"- {p}")
     return 1
+
+
+def next_id(task: str, policy: bool) -> int:
+    from . import paths, service
+
+    print(service.next_id(paths.workspace_of(Path(task).resolve()), "POL" if policy else "SCR"))
+    return 0
+
+
+def base(task: str, item: str) -> int:
+    from . import service
+
+    try:
+        out = service.base(Path(task).resolve(), item)
+    except (FileNotFoundError, FileExistsError, ValueError) as e:
+        print(f"가져오기 실패: {e}")
+        return 1
+    print(f"기준본에서 가져옴: {item} → {out.name}")
+    return 0
+
+
+def merge(task: str, dry_run: bool) -> int:
+    from . import build_dev, build_proto, paths, service
+
+    task_dir = Path(task).resolve()
+    done, conflicts = service.merge(task_dir, dry_run=dry_run)
+    if conflicts:
+        print("합치기 전에 풀어야 할 충돌 (아무것도 바꾸지 않았어요)")
+        for c in conflicts:
+            print(f"- {c}")
+    if done:
+        print("합칠 것" if (dry_run or conflicts) else "기준본에 합침")
+        for d in done:
+            print(f"- {d}")
+    if not done and not conflicts:
+        print("기준본과 달라진 것이 없어요.")
+    if not dry_run and not conflicts and done:
+        svc = paths.service(paths.workspace_of(task_dir))
+        build_proto.build(svc, capture=False)
+        build_dev.build(svc)
+        print(f"서비스 기준본 갱신: {paths.SERVICE}/{paths.PLAN}, {paths.SERVICE}/{paths.DEV_SPEC}, {paths.SERVICE}/화면목록.md")
+    return 1 if conflicts else 0
 
 
 def extract(path: str, out: str | None) -> int:
@@ -179,6 +226,15 @@ def main(argv=None) -> int:
     b.add_argument("task", help="과제 폴더 경로")
     b.add_argument("--version", dest="doc_version", default="v0.1", help="문서 버전 (기본 v0.1)")
     b.add_argument("--look", choices=["wire", "design"], help="화면 그림: wire(와이어프레임), design(디자인 화면). 과제에 저장된다")
+    ni = sub.add_parser("next-id", help="서비스 전체에서 아직 쓰지 않은 다음 화면(또는 정책) 번호")
+    ni.add_argument("task")
+    ni.add_argument("--policy", action="store_true")
+    bs = sub.add_parser("base", help="서비스 기준본의 화면이나 정책을 과제로 가져오기")
+    bs.add_argument("task")
+    bs.add_argument("item", help="SCR-xxx 또는 POL-xxx")
+    mg2 = sub.add_parser("merge", help="과제를 서비스 기준본에 합치기")
+    mg2.add_argument("task")
+    mg2.add_argument("--dry-run", action="store_true", help="합치지 않고 결과만 보기")
     v = sub.add_parser("validate", help="ID 연결 검사")
     v.add_argument("task")
     e = sub.add_parser("extract", help="문서를 텍스트로 변환")
@@ -200,6 +256,12 @@ def main(argv=None) -> int:
         return build(args.kind, args.task, args.doc_version, args.look)
     if args.command == "validate":
         return validate(args.task)
+    if args.command == "next-id":
+        return next_id(args.task, args.policy)
+    if args.command == "base":
+        return base(args.task, args.item)
+    if args.command == "merge":
+        return merge(args.task, args.dry_run)
     if args.command == "extract":
         return extract(args.path, args.out)
     if args.command == "detect":

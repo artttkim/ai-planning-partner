@@ -1,4 +1,9 @@
-"""개발용 화면 명세(.yaml) 생성. 형식은 03_기능명세서.md 5.8을 따른다."""
+"""개발 명세(개발명세.md) 생성. 개발자와 AI 코딩 도구가 읽는 한 파일이다.
+
+- 화면마다 구성(요소 트리, YAML)과 요소별 동작, 정책, 이동할 화면을 담는다.
+- 기획 문서(영향 분석, 플로우, 정책, 수용 기준, 개발 태스크)를 그대로 이어 붙인다.
+- ID(SCR, POL, FR, AC, TASK)로 서로 이어진다. 원본을 고치고 다시 만든다.
+"""
 from __future__ import annotations
 
 import re
@@ -7,7 +12,7 @@ from pathlib import Path
 import yaml
 
 from . import paths
-from .screens import load_screens
+from .screens import Screen, load_screens, task_title
 
 TYPE_MAP = {
     "상단바": "header", "하단탭바": "tabbar", "탭": "tabs", "입력창": "input.text", "검색창": "input.search",
@@ -18,63 +23,126 @@ TYPE_MAP = {
     "팝업": "dialog", "바텀시트": "bottom_sheet", "토스트": "toast", "로딩": "loading", "빈화면": "empty_state",
     "구분선": "divider", "행": "row", "묶음": "group", "아바타": "avatar",
 }
+STATUS = {"신규": "new", "변경": "changed", "참고": "reference", "기준": "base"}
 POLICY_RE = re.compile(r"POL-\d+")
 
 
+def screen_spec(s: Screen, links: dict[str, str] | None = None) -> dict:
+    """화면 하나의 개발 명세. 기획안의 개발 보기와 개발명세.md가 같은 내용을 쓴다."""
+    links = links or {}
+    by_marker = {str(d.no): d for d in s.descriptions}
+
+    def convert(c):
+        item = {"id": c.id, "type": TYPE_MAP.get(c.type.replace(" ", ""), "custom")}
+        if c.label:
+            item["text"] = c.label
+        if c.items:
+            item["items"] = c.items
+        if c.selected is not None:
+            item["selected"] = c.selected
+        for key in ("left", "right"):
+            if getattr(c, key):
+                item[f"actions_{key}"] = getattr(c, key)
+        if c.changed:
+            item["changed"] = True
+        d = by_marker.get(str(c.marker)) if c.marker is not None else None
+        if d:
+            item["no"] = int(d.no) if str(d.no).isdigit() else d.no
+            item["behavior"] = d.text
+            if d.policy:
+                item["policy"] = [p.strip() for p in d.policy.split(",") if p.strip()]
+        if c.id in links:
+            item["navigate"] = links[c.id]
+        if c.children:
+            item["children"] = [convert(ch) for ch in c.children]
+        return item
+
+    data = {
+        "id": s.id,
+        "name": s.name,
+        "status": STATUS.get(s.status, s.status),
+        "platform": s.platform,
+        "path": s.path,
+        "requirements": s.requirements,
+        "policies": sorted({p for d in s.descriptions for p in POLICY_RE.findall(f"{d.policy} {d.text}")}),
+        "components": [convert(c) for c in s.components],
+    }
+    if s.note:
+        data["note"] = s.note
+    return data
+
+
+def to_yaml(data: dict) -> str:
+    return yaml.safe_dump(data, allow_unicode=True, sort_keys=False, width=1000)
+
+
+def _docs(task_dir: Path) -> list[Path]:
+    """화면 설계를 뺀 단계 문서. 서비스 기준본은 정책.md."""
+    if paths.is_service(task_dir):
+        p = Path(task_dir) / "정책.md"
+        return [p] if p.is_file() else []
+    return sorted(p for p in paths.docs(task_dir).glob("*.md"))
+
+
+def _demote(text: str) -> str:
+    """이어 붙일 문서의 제목을 한 단계씩 낮춘다."""
+    out = []
+    in_code = False
+    for line in text.splitlines():
+        if line.strip().startswith("```"):
+            in_code = not in_code
+        if not in_code and re.match(r"^#{1,5} ", line):
+            line = "#" + line
+        if line.strip() == "> 기본 작성":
+            continue
+        out.append(line)
+    return "\n".join(out).strip()
+
+
 def build(task_dir: Path) -> list[Path]:
+    from .build_proto import _Nav, _links, links_with_nav
+
     task_dir = Path(task_dir)
-    out_dir = paths.dev(task_dir)
-    out_dir.mkdir(parents=True, exist_ok=True)
-    written = []
-    for s in load_screens(task_dir):
-        policies = sorted({p for d in s.descriptions for p in POLICY_RE.findall(f"{d.policy} {d.text}")})
-        by_marker = {str(d.no): d for d in s.descriptions}
+    screens = load_screens(task_dir)
+    by_id = {s.id: s for s in screens}
+    nav = _Nav(screens)
+    title = task_title(task_dir)
 
-        def convert(c):
-            item = {"id": c.id, "type": TYPE_MAP.get(c.type.replace(" ", ""), "custom")}
-            if c.label:
-                item["label"] = c.label
-            if c.items:
-                item["items"] = c.items
-            if c.selected is not None:
-                item["selected"] = c.selected
-            for key in ("left", "right"):
-                if getattr(c, key):
-                    item[f"actions_{key}"] = getattr(c, key)
-            if c.changed:
-                item["changed"] = True
-            d = by_marker.get(str(c.marker)) if c.marker is not None else None
-            if d:
-                item["behavior"] = d.text
-                if d.policy:
-                    item["policy"] = d.policy
-            if c.children:
-                item["children"] = [convert(ch) for ch in c.children]
-            return item
+    lines = [
+        f"# {title} · 개발 명세",
+        "",
+        "> 플랜윗이 기획 원본에서 만든 파일이다. 직접 고치지 말고 기획 원본을 고친 뒤 다시 만든다.",
+        "> 화면을 눌러 보려면 같은 폴더의 기획안.html을 연다.",
+        "",
+        "## 읽는 법",
+        "",
+        "- ID: `SCR` 화면, `POL` 정책, `FR` 기능, `AC` 수용 기준, `TASK` 개발 태스크. 화면과 정책 번호는 서비스 전체에서 하나뿐이다.",
+        "- 화면 구성은 위에서 아래 순서의 요소 트리다. `behavior`는 그 요소의 동작과 조건, `policy`는 따를 정책, `navigate`는 누르면 갈 화면이다.",
+        "- `changed: true`는 이번 과제에서 바뀌는 요소다. 디자인 값(색, 글꼴, 간격)은 디자인 시스템을 따른다.",
+        "",
+        "## 화면 목록",
+        "",
+        "| 화면 | 이름 | 구분 | 경로 | 기능 |",
+        "|---|---|---|---|---|",
+    ]
+    for s in screens:
+        lines.append(f"| {s.id} | {s.name} | {s.status} | {s.path or '-'} | {', '.join(s.requirements) or '-'} |")
+    lines += ["", "## 화면별 명세", ""]
+    for s in screens:
+        spec = screen_spec(s, links_with_nav(s, by_id, nav))
+        lines += [f"### {s.id} {s.name}", "", "```yaml", to_yaml(spec).rstrip(), "```", ""]
+        if s.descriptions:
+            lines += ["| No | 항목 | 설명 | 정책 |", "|---|---|---|---|"]
+            lines += [f"| {d.no} | {d.item} | {d.text} | {d.policy} |" for d in s.descriptions]
+            lines.append("")
+    for doc in _docs(task_dir):
+        lines += [_demote(doc.read_text(encoding="utf-8")), ""]
 
-        components = [convert(c) for c in s.components]
-        data = {
-            "id": s.id,
-            "name": s.name,
-            "status": {"신규": "new", "변경": "changed", "참고": "reference"}[s.status],
-            "agreement": "초안",
-            "platform": s.platform,
-            "path": s.path,
-            "requirements": s.requirements,
-            "policies": policies,
-            "components": components,
-            "descriptions": [
-                {"no": d.no, "item": d.item, "text": d.text, **({"policy": d.policy} if d.policy else {})}
-                for d in s.descriptions
-            ],
-        }
-        if s.note:
-            data["note"] = s.note
-        out = out_dir / f"{s.id}.yaml"
-        out.write_text(yaml.safe_dump(data, allow_unicode=True, sort_keys=False), encoding="utf-8")
-        written.append(out)
-    # 원본에서 지운 화면의 명세는 함께 지운다.
-    for old in out_dir.glob("SCR-*.yaml"):
-        if old not in written:
-            old.unlink()
-    return written
+    out = paths.output_of(task_dir) / paths.DEV_SPEC
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(lines).rstrip() + "\n", encoding="utf-8")
+    old = paths.dev(task_dir)  # 예전: 화면마다 yaml
+    if old.is_dir():
+        import shutil
+        shutil.rmtree(old, ignore_errors=True)
+    return [out]

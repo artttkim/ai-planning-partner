@@ -9,7 +9,7 @@ import yaml
 
 from . import paths
 
-TITLE_RE = re.compile(r"^#\s+(?P<id>\S+)\s+(?P<name>.+?)\s*·\s*(?P<status>신규|변경|참고)\s*$")
+TITLE_RE = re.compile(r"^#\s+(?P<id>\S+)\s+(?P<name>.+?)\s*·\s*(?P<status>신규|변경|참고|기준)\s*$")
 META_RE = re.compile(r"^-\s*(?P<key>[^:]+):\s*(?P<value>.*)$")
 YAML_RE = re.compile(r"```ya?ml\s*\n(?P<body>.*?)```", re.S)
 
@@ -59,6 +59,7 @@ class Screen:
     components: list[Component] = field(default_factory=list)
     descriptions: list[DescRow] = field(default_factory=list)
     note: str = ""
+    base: str = ""          # 서비스 기준본에서 가져온 화면이면 그때 기준본의 지문 (합칠 때 충돌 검사)
     source: Path | None = None
 
 
@@ -112,6 +113,8 @@ def parse_screen(path: Path) -> Screen:
             screen.requirements = [v.strip() for v in value.split(",") if v.strip()]
         elif key == "플랫폼":
             screen.platform = value
+        elif key == "기준본":
+            screen.base = value
 
     ym = YAML_RE.search(sec.get("구성", ""))
     if ym:
@@ -161,6 +164,8 @@ def _id_key(screen_id: str):
 
 
 def find_screen_dir(task_dir: Path) -> Path:
+    if paths.is_service(task_dir):
+        return Path(task_dir) / "화면"
     src = paths.docs(task_dir)
     candidates = sorted(p for p in src.glob("*화면설계*") if p.is_dir())
     if not candidates:
@@ -170,12 +175,16 @@ def find_screen_dir(task_dir: Path) -> Path:
 
 def load_screens(task_dir: Path) -> list[Screen]:
     folder = find_screen_dir(task_dir)
+    if not folder.is_dir():
+        return []
     screens = [parse_screen(p) for p in folder.glob("*.md") if not p.name.startswith("_")]
     return sorted(screens, key=lambda s: _id_key(s.id))
 
 
 def task_title(task_dir: Path) -> str:
     """00_과제요약.md의 첫 제목, 없으면 폴더 이름에서 날짜를 뺀 것."""
+    if paths.is_service(task_dir):
+        return "서비스 기준본"
     summary = paths.summary(task_dir)
     if summary.exists():
         for line in summary.read_text(encoding="utf-8").splitlines():

@@ -18,7 +18,14 @@ def task_requirements(task_dir: Path) -> list[str]:
 
 
 def check(task_dir: Path) -> list[str]:
-    problems = []
+    return check_all(task_dir)[0]
+
+
+def check_all(task_dir: Path) -> tuple[list[str], list[str]]:
+    """(고칠 것, 확인할 것)."""
+    from . import service
+
+    problems, notes = [], []
     screens = load_screens(task_dir)
     ids = [s.id for s in screens]
     for dup in {i for i in ids if ids.count(i) > 1}:
@@ -28,6 +35,12 @@ def check(task_dir: Path) -> list[str]:
         if fr not in covered:
             problems.append(f"{fr}가 어떤 화면에도 연결되지 않았어요.")
     known = set(ids)
+    workspace = paths.workspace_of(task_dir)
+    if paths.is_workspace(workspace) and not paths.is_service(task_dir):
+        known |= set(service.inventory(workspace)["SCR"])  # 기준본이나 다른 과제의 화면을 가리킬 수 있다
+        p2, n2 = service.overlaps(task_dir)
+        problems += p2
+        notes += n2
     for s in screens:
         comps = all_components(s)
         cids = [c.id for c in comps]
@@ -44,4 +57,4 @@ def check(task_dir: Path) -> list[str]:
             for ref in re.findall(r"SCR-\d+(?:-P\d+)?", d.text):
                 if ref not in known:
                     problems.append(f"{s.id}: 설명 {d.no}이 가리키는 {ref} 화면이 없어요.")
-    return problems
+    return problems, notes

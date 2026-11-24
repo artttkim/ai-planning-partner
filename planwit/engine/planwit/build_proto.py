@@ -321,7 +321,7 @@ def _all(screen: Screen):
 
 def _theme(task_dir: Path) -> str:
     css = (Path(__file__).with_name("proto_theme.css")).read_text(encoding="utf-8")
-    custom = Path(task_dir).parent.parent / "회사" / "디자인.css"
+    custom = paths.workspace_of(task_dir) / "회사" / "디자인.css"
     if custom.is_file():
         css += "\n/* 회사/디자인.css */\n" + custom.read_text(encoding="utf-8")
     return css
@@ -450,7 +450,25 @@ def image_path(task_dir: Path, screen_id: str) -> Path:
 
 
 def proto_path(task_dir: Path) -> Path:
-    return paths.output(task_dir) / f"{PROTO}.html"
+    return paths.output_of(task_dir) / paths.PLAN
+
+
+def links_with_nav(screen: Screen, by_id: dict[str, Screen], nav: "_Nav") -> dict:
+    """요소 ID → 누르면 갈 화면. 탭은 항목별 화면, 팝업 안 버튼은 'back'(닫기)."""
+    out: dict = dict(_links(screen, set(by_id)))
+    for c in _all(screen):
+        t = _norm(c.type)
+        targets = nav.tabbar if t == "하단탭바" else nav.tabs.get(tuple(c.items), {}) if t == "탭" else None
+        if targets:
+            m = {c.items[i]: tgt for i, tgt in sorted(targets.items()) if i < len(c.items) and tgt != screen.id}
+            if m:
+                out[c.id] = m
+    for top in screen.components:
+        if _norm(top.type) in ("팝업", "바텀시트"):
+            for c in top.walk():
+                if _norm(c.type) in ("기본버튼", "보조버튼") and c.id not in out:
+                    out[c.id] = "back"
+    return out
 
 
 _SHELL_CSS = """
@@ -489,6 +507,21 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-desc .pol { color: #8a8f98; font-size: 12px; margin-top: 2px; }
 .pw-desc .note { margin-top: 14px; color: #4a5160; white-space: pre-line; }
 .pw-draft { font-size: 11px; color: #8a8f98; }
+.pw-tabs { display: flex; gap: 4px; margin-bottom: 14px; }
+.pw-tabs button { font: inherit; font-size: 13px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 6px 14px; cursor: pointer; }
+.pw-tabs button.on { background: #2f3441; color: #fff; border-color: #2f3441; }
+.pw-dev td { font-size: 12px; }
+.pw-dev td.cid { font-family: Consolas, monospace; color: #4a5160; white-space: nowrap; }
+.pw-dev td.kind { font-family: Consolas, monospace; color: #8a8f98; }
+.pw-dev tr:hover td { background: #f0f4ff; }
+.pw-dev .go { color: #2f6fed; font-size: 12px; margin-top: 2px; }
+.pw-dev th:nth-child(1) { width: 92px !important; }
+.pw-dev th:nth-child(2) { width: 86px !important; }
+.pw-n { display: inline-flex; width: 16px; height: 16px; border-radius: 50%; background: #e5484d; color: #fff; font-size: 10px; font-weight: 700; align-items: center; justify-content: center; }
+.pw-hl { outline: 2px dashed #2f6fed !important; outline-offset: 2px; }
+.pw-code { margin-top: 14px; }
+.pw-code button { font: inherit; font-size: 12px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.pw-code pre { margin-top: 8px; background: #f5f6f8; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.45; overflow: auto; max-height: 320px; white-space: pre; }
 """
 
 _SHELL_JS = """
@@ -513,9 +546,42 @@ _SHELL_JS = """
       sec.appendChild(m);
     });
   }
+  var view = 'desc';
+  function goText(g){
+    if (!g) return '';
+    if (g === 'back') return '닫고 이전 화면';
+    if (typeof g === 'string') return '→ ' + g;
+    return Object.keys(g).map(function(k){ return k + ' → ' + g[k]; }).join(', ');
+  }
+  function dev(id){
+    var d = data[id], h = '';
+    h += '<table class="pw-dev"><tr><th>요소 ID</th><th>종류</th><th>글자 · 동작</th></tr>';
+    d.tree.forEach(function(r){
+      var pad = (r.depth * 10) + 'px';
+      h += '<tr data-hl="' + esc(r.id) + '"><td class="cid" style="padding-left:' + pad + '">' + (r.no ? '<span class="pw-n">' + esc(r.no) + '</span> ' : '') + esc(r.id) + '</td>' +
+           '<td class="kind">' + esc(r.type) + (r.changed ? ' *' : '') + '</td><td>' + esc(r.text || '') +
+           (r.behavior ? '<div>' + esc(r.behavior) + '</div>' : '') +
+           (r.policy ? '<div class="pol">정책: ' + esc(r.policy) + '</div>' : '') +
+           (r.navigate ? '<div class="go">' + esc(goText(r.navigate)) + '</div>' : '') + '</td></tr>';
+    });
+    h += '</table><div class="pw-sub" style="margin-top:8px">* 이번 과제에서 바뀌는 요소. 줄에 마우스를 올리면 화면에서 위치를 보여 줘요.</div>';
+    h += '<div class="pw-code"><button id="pw-copy">이 화면 명세 복사 (YAML)</button><pre id="pw-yaml">' + esc(d.yaml) + '</pre></div>';
+    return h;
+  }
+  function copyText(t){
+    var ta = document.createElement('textarea'); ta.value = t; document.body.appendChild(ta); ta.select();
+    try { document.execCommand('copy'); } catch (e) {}
+    ta.remove();
+  }
   function desc(id){
-    var d = data[id], h = '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
+    var d = data[id], h = '<div class="pw-tabs"><button data-view="desc" class="' + (view === 'desc' ? 'on' : '') + '">설명</button>' +
+      '<button data-view="dev" class="' + (view === 'dev' ? 'on' : '') + '">개발 보기</button></div>';
+    h += '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
     h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + '</div>';
+    if (view === 'dev'){
+      document.querySelector('.pw-desc').innerHTML = h + dev(id);
+      return;
+    }
     if (d.rows.length){
       h += '<table><tr><th>No</th><th>항목</th><th>설명</th></tr>';
       d.rows.forEach(function(r){
@@ -534,7 +600,7 @@ _SHELL_JS = """
     sec.classList.add('on'); cur = id; phone.scrollTop = 0;
     document.querySelectorAll('.pw-list a').forEach(function(a){ a.classList.toggle('on', a.getAttribute('data-to') === id); });
     desc(id); marks(sec);
-    if (history.replaceState) history.replaceState(null, '', '#' + id);
+    if (history.replaceState) history.replaceState(null, '', '#' + id + (view === 'dev' ? '~dev' : ''));
   }
   function back(){
     var p = hist.pop() || parentOf(cur);
@@ -551,9 +617,22 @@ _SHELL_JS = """
   });
   document.getElementById('pw-back').addEventListener('click', back);
   document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
+  var panel = document.querySelector('.pw-desc');
+  panel.addEventListener('click', function(e){
+    var b = e.target.closest('[data-view]');
+    if (b){ view = b.getAttribute('data-view'); desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
+    if (e.target.id === 'pw-copy'){ copyText(data[cur].yaml); e.target.textContent = '복사했어요'; }
+  });
+  function hl(id, on){
+    var sec = document.getElementById(cur); if (!sec) return;
+    sec.querySelectorAll('.screen:not(.bg) [data-cid="' + id + '"]').forEach(function(el){ el.classList.toggle('pw-hl', on); });
+  }
+  panel.addEventListener('mouseover', function(e){ var r = e.target.closest('[data-hl]'); if (r) hl(r.getAttribute('data-hl'), true); });
+  panel.addEventListener('mouseout', function(e){ var r = e.target.closest('[data-hl]'); if (r) hl(r.getAttribute('data-hl'), false); });
   document.getElementById('pw-marks').addEventListener('change', function(e){ document.body.classList.toggle('no-marks', !e.target.checked); });
   window.addEventListener('resize', function(){ var s = document.querySelector('.scr.on'); if (s) marks(s); });
-  var start = location.hash.slice(1);
+  var hash = location.hash.slice(1).split('~'), start = hash[0];
+  if (hash[1] === 'dev') view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
 })();
 </script>
@@ -569,15 +648,32 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
     links = "".join(
         f'<a data-to="{_t(s.id)}" class="{"child" if _parent_id(s.id) else ""}"><span class="id">{_t(s.id)}</span>'
         f'{_t(s.name)}</a>' for s in order)
-    data = {s.id: {"name": s.name, "status": s.status, "path": s.path, "note": s.note,
-                   "rows": [[d.no, d.item, d.text, d.policy] for d in s.descriptions]} for s in order}
+    from .build_dev import screen_spec, to_yaml
+
+    def flat(items, depth=0):
+        rows = []
+        for it in items:
+            pol = it.get("policy")
+            rows.append({"id": it["id"], "depth": depth, "type": it["type"], "text": it.get("text", ""),
+                         "no": it.get("no", ""), "behavior": it.get("behavior", ""),
+                         "policy": ", ".join(pol) if isinstance(pol, list) else (pol or ""),
+                         "navigate": it.get("navigate"), "changed": it.get("changed", False)})
+            rows += flat(it.get("children", []), depth + 1)
+        return rows
+
+    data = {}
+    for s in order:
+        spec = screen_spec(s, links_with_nav(s, by_id, nav))
+        data[s.id] = {"name": s.name, "status": s.status, "path": s.path, "note": s.note,
+                      "rows": [[d.no, d.item, d.text, d.policy] for d in s.descriptions],
+                      "tree": flat(spec["components"]), "yaml": to_yaml(spec)}
     data["__start__"] = order[0].id
     payload = json.dumps(data, ensure_ascii=False).replace("</", "<\\/")
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
-            f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{_t(title)} 프로토타입</title>'
+            f'<meta name="viewport" content="width=device-width, initial-scale=1"><title>{_t(title)} 기획안</title>'
             f'<style>{css}\n{_SHELL_CSS}</style></head>'
             f'<body class="pw"><nav class="pw-list"><div class="pw-title">{_t(title)}</div>'
-            f'<div class="pw-sub">프로토타입 초안 · 디자인 시안이 아니에요</div>{links}</nav>'
+            f'<div class="pw-sub">기획안 초안 · 디자인 시안이 아니에요. 개발 명세는 같은 폴더의 개발명세.md</div>{links}</nav>'
             f'<div class="pw-stage"><div class="pw-bar"><button id="pw-home">처음으로</button>'
             f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
@@ -585,13 +681,15 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
 
 
 def build(task_dir: Path, capture: bool = True) -> list[Path]:
-    """프로토타입 파일 하나를 만들고, capture=True면 화면마다 캡처와 요소 위치를 저장한다."""
+    """기획안.html(프로토타입 + 설명 + 개발 보기) 하나를 만들고, capture=True면 화면마다 캡처와 요소 위치를 저장한다.
+
+    캡처는 화면 설계서(.pptx)를 만들 때만 필요하다."""
     from .screens import task_title
 
     task_dir = Path(task_dir)
     screens = load_screens(task_dir)
     if not screens:
-        raise ValueError("화면 원본이 없어요.")
+        return []
     by_id = {s.id: s for s in screens}
     css = _theme(task_dir)
     meta_dir = Path(task_dir) / ".planwit" / PROTO
@@ -600,9 +698,11 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     for old in meta_dir.glob("SCR-*"):
         if old.name.split(".")[0] not in keep:
             old.unlink()
-    old_dir = paths.output(task_dir) / PROTO  # 예전: 화면마다 HTML을 따로 만들던 폴더
-    if old_dir.is_dir():
-        shutil.rmtree(old_dir, ignore_errors=True)
+    for old in (paths.output(task_dir) / PROTO, paths.output(task_dir) / f"{PROTO}.html"):  # 예전 이름
+        if old.is_dir():
+            shutil.rmtree(old, ignore_errors=True)
+        elif old.is_file():
+            old.unlink()
 
     out = proto_path(task_dir)
     out.parent.mkdir(parents=True, exist_ok=True)
