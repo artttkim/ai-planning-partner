@@ -132,9 +132,10 @@ def test_proto_html_and_design_deck(workspace):
 
     task = _task(workspace)
     pages = build_proto.build(task, capture=False)
-    assert pages and all(p.suffix == ".html" for p in pages)
-    text = (task / "3_결과물" / "프로토타입" / "SCR-010.html").read_text(encoding="utf-8")
-    assert "data-marker=" in text
+    assert pages == [build_proto.proto_path(task)]
+    text = pages[0].read_text(encoding="utf-8")
+    assert "data-marker=" in text and 'id="SCR-010"' in text and 'id="SCR-020-P1"' in text
+    assert "data-go=" in text and "data-back=" in text
 
     # 브라우저 없이 캡처와 위치 파일을 흉내 낸다.
     png = base64.b64decode(
