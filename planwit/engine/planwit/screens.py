@@ -59,6 +59,7 @@ class Screen:
     components: list[Component] = field(default_factory=list)
     descriptions: list[DescRow] = field(default_factory=list)
     note: str = ""
+    ref: str = ""           # 따른 기존 화면 (예: 언어설정)
     base: str = ""          # 서비스 기준본에서 가져온 화면이면 그때 기준본의 지문 (합칠 때 충돌 검사)
     source: Path | None = None
 
@@ -113,6 +114,8 @@ def parse_screen(path: Path) -> Screen:
             screen.requirements = [v.strip() for v in value.split(",") if v.strip()]
         elif key == "플랫폼":
             screen.platform = value
+        elif key == "참고 화면":
+            screen.ref = value
         elif key == "기준본":
             screen.base = value
 

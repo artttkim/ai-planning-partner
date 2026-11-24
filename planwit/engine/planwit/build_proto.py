@@ -258,7 +258,8 @@ class _Html:
     def _빈화면(self, c):
         # 검색창이 있는 화면의 빈화면은 "검색 결과 없음"이다: 평소에는 숨기고, 검색 결과가 없을 때 보인다
         cls = "empty pw-search-empty" if self.has_search else "empty"
-        return f'<div {_attrs(c, cls)}><div class="art"></div>{self.kids(c) or "<p>" + _t(c.label) + "</p>"}</div>'
+        art = "" if c.size == "small" else '<div class="art"></div>'
+        return f'<div {_attrs(c, cls)}>{art}{self.kids(c) or "<p>" + _t(c.label) + "</p>"}</div>'
 
     def _기타(self, c):
         return f'<div {_attrs(c, "box")}>{_t(c.label)}{self.kids(c)}</div>'
@@ -708,7 +709,7 @@ _SHELL_JS = """
     if (view === 'dev' && !data.__dev__) view = 'desc';
     var d = data[id], h = tabs();
     h += '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
-    h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + '</div>';
+    h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + (d.ref ? '<br>따른 기존 화면: ' + esc(d.ref) : '') + '</div>';
     var panelEl = document.querySelector('.pw-desc');
     if (view === 'dev'){ panelEl.innerHTML = h + dev(id); return; }
     if (view === 'fb'){ panelEl.innerHTML = h + '<div class="pw-fb" id="pw-fb"></div>'; renderFb(); return; }
@@ -898,7 +899,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
     data = {}
     for s in order:
         spec = screen_spec(s, links_with_nav(s, by_id, nav))
-        data[s.id] = {"name": s.name, "status": s.status, "path": s.path, "note": s.note,
+        data[s.id] = {"name": s.name, "status": s.status, "path": s.path, "note": s.note, "ref": s.ref,
                       "rows": [[d.no, d.item, d.text, d.policy] for d in s.descriptions],
                       }
     data["__start__"] = order[0].id
