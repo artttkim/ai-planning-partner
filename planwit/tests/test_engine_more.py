@@ -120,3 +120,36 @@ def test_engine_ignores_folders_outside_workspace(tmp_path, capsys):
     assert paths.is_workspace(ws)
     assert cli.main(["migrate", str(ws)]) == 0
     assert (ws / "과제" / "t" / paths.DOCS).is_dir()
+
+
+def test_proto_html_and_design_deck(workspace):
+    """디자인 화면: HTML에 번호 요소와 화면 이동이 들어가고, 화면 설계서에 캡처와 번호가 들어간다."""
+    import base64
+    import json as _json
+
+    from planwit import build_proto
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    pages = build_proto.build(task, capture=False)
+    assert pages and all(p.suffix == ".html" for p in pages)
+    text = (task / "3_결과물" / "프로토타입" / "SCR-010.html").read_text(encoding="utf-8")
+    assert "data-marker=" in text
+
+    # 브라우저 없이 캡처와 위치 파일을 흉내 낸다.
+    png = base64.b64decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8/5+hHgAHggJ/PchI7wAAAABJRU5ErkJggg==")
+    for s in load_screens(task):
+        build_proto.image_path(task, s.id).write_bytes(png)
+        boxes = {c.id: [10, 10, 100, 40] for top in s.components for c in top.walk()}
+        build_proto.boxes_path(task, s.id).write_text(
+            _json.dumps({"width": 360, "height": 760, "boxes": boxes}), encoding="utf-8")
+    out = build_pptx.build(task, look="design")
+    names = [sh.name for slide in Presentation(out).slides for sh in slide.shapes]
+    assert "SCR-010/image" in names
+    assert any(n.startswith("SCR-010/marker/") for n in names)
+
+
+def test_design_deck_needs_proto(workspace):
+    with pytest.raises(ValueError):
+        build_pptx.build(_task(workspace), look="design")

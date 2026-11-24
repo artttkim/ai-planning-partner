@@ -37,13 +37,36 @@ def doctor() -> int:
     return 0
 
 
-def build(kind: str, task: str, version: str) -> int:
-    from . import build_dev, build_pptx, snapshot
+def _look(task_dir: Path, look: str | None) -> str:
+    """화면 설계서의 화면 그림 방식. 지정하면 과제에 저장하고, 안 하면 저장된 값(기본 wire)을 쓴다."""
+    f = task_dir / ".planwit" / "settings.json"
+    data = json.loads(f.read_text(encoding="utf-8")) if f.is_file() else {}
+    if look:
+        data["look"] = look
+        f.parent.mkdir(parents=True, exist_ok=True)
+        f.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    chosen = data.get("look", "design")
+    if chosen == "design":
+        from . import build_proto
+        if build_proto.find_browser() is None:
+            print("안내: 화면을 캡처할 브라우저(Edge 또는 Chrome)가 없어 와이어프레임으로 만들어요.")
+            return "wire"
+    return chosen
+
+
+def build(kind: str, task: str, version: str, look: str | None = None) -> int:
+    from . import build_dev, build_pptx, build_proto, snapshot
 
     task_dir = Path(task).resolve()
+    look = _look(task_dir, look)
     try:
+        if kind == "proto" or (kind == "all" and look == "design"):
+            for out in build_proto.build(task_dir):
+                if out.suffix == ".png":
+                    continue
+                print(f"생성: {out.relative_to(task_dir).as_posix()}")
         if kind in ("pptx", "all"):
-            out = build_pptx.build(task_dir, version=version)
+            out = build_pptx.build(task_dir, version=version, look=look)
             snapshot.record(task_dir, out)
             print(f"생성: {out.relative_to(task_dir).as_posix()}")
         if kind in ("dev", "all"):
@@ -52,7 +75,7 @@ def build(kind: str, task: str, version: str) -> int:
     except PermissionError as e:
         print(f"생성 실패: 파일이 다른 프로그램에서 열려 있어요. 파워포인트를 닫고 다시 시도해 주세요. ({e.filename})")
         return 1
-    except (ValueError, FileNotFoundError) as e:
+    except (ValueError, FileNotFoundError, RuntimeError) as e:
         print(f"생성 실패: {e}")
         return 1
     return 0
@@ -152,9 +175,10 @@ def main(argv=None) -> int:
     sub.add_parser("doctor", help="Python과 패키지 점검")
     sub.add_parser("version", help="엔진 버전")
     b = sub.add_parser("build", help="원본에서 파일 생성")
-    b.add_argument("kind", choices=["pptx", "dev", "all"])
+    b.add_argument("kind", choices=["pptx", "dev", "proto", "all"])
     b.add_argument("task", help="과제 폴더 경로")
     b.add_argument("--version", dest="doc_version", default="v0.1", help="문서 버전 (기본 v0.1)")
+    b.add_argument("--look", choices=["wire", "design"], help="화면 그림: wire(와이어프레임), design(디자인 화면). 과제에 저장된다")
     v = sub.add_parser("validate", help="ID 연결 검사")
     v.add_argument("task")
     e = sub.add_parser("extract", help="문서를 텍스트로 변환")
@@ -173,7 +197,7 @@ def main(argv=None) -> int:
         print(__version__)
         return 0
     if args.command == "build":
-        return build(args.kind, args.task, args.doc_version)
+        return build(args.kind, args.task, args.doc_version, args.look)
     if args.command == "validate":
         return validate(args.task)
     if args.command == "extract":

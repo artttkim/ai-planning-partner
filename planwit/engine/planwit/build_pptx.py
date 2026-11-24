@@ -707,6 +707,37 @@ def _draw_wireframe(slide, screen: Screen, area, screens_by_id: dict[str, Screen
     _draw_marks(cv)
 
 
+def _draw_design(slide, screen: Screen, area, task_dir: Path):
+    """디자인 화면 캡처를 넣고 그 위에 번호와 변경 표시를 찍는다. 캡처와 위치는 build_proto가 만든다."""
+    import json
+
+    from . import build_proto
+
+    png = build_proto.image_path(task_dir, screen.id)
+    meta = build_proto.boxes_path(task_dir, screen.id)
+    if not (png.is_file() and meta.is_file()):
+        raise ValueError(f"{screen.id}: 디자인 화면이 없어요. 먼저 `build proto`를 실행해 주세요.")
+    data = json.loads(meta.read_text(encoding="utf-8"))
+    fw, fh = data["width"], data["height"]
+    ax, ay, aw, ah = area
+    margin = Inches(0.15)
+    k = min((aw - margin * 2) / fw, (ah - margin * 2) / fh)
+    w, h = int(fw * k), int(fh * k)
+    fx, fy = ax + (aw - w) // 2, ay + (ah - h) // 2
+    pic = slide.shapes.add_picture(str(png), fx, fy, w, h)
+    pic.name = f"{screen.id}/image"
+    pic.line.color.rgb = LINE
+    pic.line.width = Pt(0.75)
+
+    cv = _Canvas(slide, screen.id, fx, fy, k)
+    by_id = {c.id: c for top in screen.components for c in top.walk()}
+    for cid, (x, y, bw, bh) in data.get("boxes", {}).items():
+        c = by_id.get(cid)
+        if c is not None and (c.marker is not None or c.changed):
+            cv.marks.append((c, x, y, bw, bh))
+    _draw_marks(cv)
+
+
 # ---------- 장표 ----------
 
 def _note_height(note: str) -> tuple[float, int]:
@@ -735,7 +766,8 @@ def _table_size(rows, avail_in: float) -> int:
     return 7
 
 
-def _screen_slide(prs, screen: Screen, version: str, screens_by_id: dict[str, Screen]):
+def _screen_slide(prs, screen: Screen, version: str, screens_by_id: dict[str, Screen],
+                  look: str = "wire", task_dir: Path | None = None):
     slide = prs.slides.add_slide(prs.slide_layouts[6])
     _header(slide, [
         (screen.id, 1.3, True, f"{screen.id}/header/id", 11),
@@ -751,7 +783,10 @@ def _screen_slide(prs, screen: Screen, version: str, screens_by_id: dict[str, Sc
     bottom = SLIDE_H - Inches(0.2) - Inches(note_h) - Inches(0.08)
     area = (Inches(0.3), top, Inches(8.9), bottom - top)
     _box(slide, *area, fill=WHITE, line=LINE, name=f"{screen.id}/area")
-    _draw_wireframe(slide, screen, area, screens_by_id)
+    if look == "design":
+        _draw_design(slide, screen, area, task_dir)
+    else:
+        _draw_wireframe(slide, screen, area, screens_by_id)
 
     rows = [["No", "항목", "설명"]]
     for d in screen.descriptions:
@@ -797,7 +832,8 @@ def _index(prs, screens: list[Screen]):
            [Inches(1.6), Inches(3.0), Inches(1.0), Inches(4.13), Inches(3.0)], name="index/table", size=10)
 
 
-def build(task_dir: Path, version: str = "v0.1", today: str | None = None) -> Path:
+def build(task_dir: Path, version: str = "v0.1", today: str | None = None, look: str = "wire") -> Path:
+    """화면 설계서를 만든다. look: wire(와이어프레임) 또는 design(build_proto가 만든 디자인 화면 캡처)."""
     task_dir = Path(task_dir)
     screens = load_screens(task_dir)
     if not screens:
@@ -812,7 +848,7 @@ def build(task_dir: Path, version: str = "v0.1", today: str | None = None) -> Pa
     _history(prs, version, today)
     _index(prs, screens)
     for s in screens:
-        _screen_slide(prs, s, version, by_id)
+        _screen_slide(prs, s, version, by_id, look, task_dir)
 
     out_dir = paths.output(task_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
