@@ -39,6 +39,9 @@ ICONS = {
     "통계": '<path d="M5 20V11M12 20V5M19 20v-7"/>',
     "다함께": '<circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 14c3 0 6 1.5 6 4.5"/>',
     "친구": '<circle cx="9" cy="8" r="3"/><circle cx="16" cy="9" r="2.5"/><path d="M3 19c0-3 3-5 6-5s6 2 6 5M14 14c3 0 6 1.5 6 4.5"/>',
+    "공휴일": '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4M10 13l4 4M14 13l-4 4"/>',
+    "달력": '<rect x="4" y="5" width="16" height="15" rx="2"/><path d="M4 10h16M9 3v4M15 3v4"/>',
+    "체크": '<path d="M5 12l5 5 9-10"/>',
     "사람": '<circle cx="12" cy="8" r="3.5"/><path d="M5 20c0-4 3-6 7-6s7 2 7 6"/>',
 }
 
@@ -208,7 +211,8 @@ class _Html:
         return f'<div {_attrs(c, "img")}><span>{_t(c.label)}</span></div>'
 
     def _아이콘(self, c):
-        return f'<span {_attrs(c, "ico solo")}>{_svg(c.label)}</span>'
+        small = c.size == "small"
+        return f'<span {_attrs(c, "ico solo" + (" small" if small else ""))}>{_svg(c.label, 16 if small else 24)}</span>'
 
     def _아바타(self, c):
         return f'<span {_attrs(c, "avatar")}>{_t(c.label[:1])}</span>'
