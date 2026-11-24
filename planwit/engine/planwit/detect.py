@@ -58,7 +58,8 @@ def changes(task_dir: Path) -> list[dict]:
 def scan(workspace: Path) -> str:
     workspace = Path(workspace)
     lines = []
-    for task in sorted((workspace / "과제").glob("*/")):
+    from . import paths as _paths
+    for task in _paths.all_tasks(workspace):
         for item in changes(task):
             if not item["diffs"]:
                 # 위치나 모양만 바뀜: 원본에 반영할 글자가 없으니 기록만 새로 한다.

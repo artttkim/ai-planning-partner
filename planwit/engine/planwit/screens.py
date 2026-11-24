@@ -184,7 +184,7 @@ def load_screens(task_dir: Path) -> list[Screen]:
 def task_title(task_dir: Path) -> str:
     """00_과제요약.md의 첫 제목, 없으면 폴더 이름에서 날짜를 뺀 것."""
     if paths.is_service(task_dir):
-        return "서비스 기준본"
+        return f"{paths.service_root_of(task_dir).name} 기준본"
     summary = paths.summary(task_dir)
     if summary.exists():
         for line in summary.read_text(encoding="utf-8").splitlines():

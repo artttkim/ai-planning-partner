@@ -1,5 +1,7 @@
 """서비스 기준본. 과제를 나눠 작업하고, 끝난 과제를 서비스 전체 화면과 정책에 합친다.
 
+이 모듈의 함수가 받는 workspace는 서비스 폴더(<작업 공간>/<서비스>/)다. 번호와 기준본은 서비스마다 따로다.
+
 - 화면 번호(SCR)와 정책 번호(POL)는 서비스 전체에서 하나뿐이다. 새 번호는 next_id로 받는다.
 - 기준본에 있는 화면이나 정책을 고치는 과제는 base로 가져온다. 가져올 때 기준본의 지문을 함께 적는다.
 - merge는 과제의 화면과 정책을 기준본에 합친다. 과제를 시작한 뒤 다른 과제가 같은 화면을 먼저 합쳤으면
@@ -108,7 +110,7 @@ def next_id(workspace: Path, kind: str = "SCR") -> str:
 def base(task_dir: Path, item_id: str) -> Path:
     """기준본의 화면이나 정책을 과제로 가져온다. 기준본 지문을 적어 둔다."""
     task_dir = Path(task_dir)
-    svc = paths.service(paths.workspace_of(task_dir))
+    svc = paths.service(paths.service_root_of(task_dir))
     if item_id.startswith("SCR-"):
         src = svc / "화면" / f"{item_id}.md"
         if not src.is_file():
@@ -163,7 +165,7 @@ def _to_base_policy(sec: str, task_name: str) -> str:
 def merge(task_dir: Path, dry_run: bool = False) -> tuple[list[str], list[str]]:
     """과제를 기준본에 합친다. (한 일, 충돌) 목록을 돌려준다. 충돌이 하나라도 있으면 아무것도 쓰지 않는다."""
     task_dir = Path(task_dir)
-    workspace = paths.workspace_of(task_dir)
+    workspace = paths.service_root_of(task_dir)  # 이 모듈에서 workspace는 서비스 폴더다
     svc = paths.service(workspace)
     done, conflicts, writes = [], [], []
 
@@ -264,7 +266,7 @@ def write_registry(workspace: Path) -> Path:
 def overlaps(task_dir: Path) -> tuple[list[str], list[str]]:
     """이 과제의 번호가 다른 과제나 기준본과 겹치는지. (고칠 것, 확인할 것)을 돌려준다. validate가 쓴다."""
     task_dir = Path(task_dir)
-    inv = inventory(paths.workspace_of(task_dir))
+    inv = inventory(paths.service_root_of(task_dir))
     me = task_dir.name
     out, notes = [], []
     for kind in ("SCR", "POL"):

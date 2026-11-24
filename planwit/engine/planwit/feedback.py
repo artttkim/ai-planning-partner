@@ -101,12 +101,11 @@ def pending(task_dir: Path) -> list[dict]:
 
 def pending_message(workspace: Path) -> str:
     """훅에서 쓴다. 새 피드백이 있는 과제를 알려 준다."""
-    root = Path(workspace) / "과제"
     lines = []
-    for task in sorted(p for p in root.glob("*/") if p.is_dir()) if root.is_dir() else []:
+    for task in paths.all_tasks(Path(workspace)):
         n = len(pending(task))
         if n:
-            lines.append(f"- 과제 `{task.name}`: 새 피드백 {n}개")
+            lines.append(f"- 과제 `{paths.service_root_of(task).name}/{task.name}`: 새 피드백 {n}개")
     if not lines:
         return ""
     return ("[플랜윗 기획안 피드백] 기획자가 기획안에 피드백을 남겼습니다. 기획자의 요청을 처리한 뒤(요청이 없거나 인사면 바로) "

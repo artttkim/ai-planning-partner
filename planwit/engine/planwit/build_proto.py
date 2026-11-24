@@ -4,7 +4,7 @@
 - 캡처: .planwit/프로토타입/<화면 ID>.png (화면 설계서에 넣는 그림)
 - 번호 위치: .planwit/프로토타입/<화면 ID>.json (요소 ID별 위치와 크기, px)
 
-디자인 값은 엔진의 proto_theme.css를 쓰고, 작업 공간에 회사/디자인.css가 있으면 그 뒤에 덧붙여 덮어쓴다.
+디자인 값은 엔진의 proto_theme.css를 쓰고, 서비스의 디자인/디자인.css(없으면 회사/디자인.css)가 있으면 그 뒤에 덧붙여 덮어쓴다.
 캡처에는 설치된 Edge 또는 Chrome을 쓴다 (PLANWIT_BROWSER로 경로 지정 가능).
 """
 from __future__ import annotations
@@ -321,9 +321,9 @@ def _all(screen: Screen):
 
 def _theme(task_dir: Path) -> str:
     css = (Path(__file__).with_name("proto_theme.css")).read_text(encoding="utf-8")
-    custom = paths.workspace_of(task_dir) / "회사" / "디자인.css"
-    if custom.is_file():
-        css += "\n/* 회사/디자인.css */\n" + custom.read_text(encoding="utf-8")
+    custom = paths.design_css(task_dir)
+    if custom:
+        css += "\n/* 디자인.css */\n" + custom.read_text(encoding="utf-8")
     return css
 
 

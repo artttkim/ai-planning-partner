@@ -171,7 +171,7 @@ def _ws_with_tasks(tmp_path):
     (ws / paths.WORKSPACE_MARK).write_text("", encoding="utf-8")
     tasks = []
     for name in ("2026-11-20_가", "2026-11-21_나"):
-        t = ws / "과제" / name
+        t = ws / "서비스A" / "과제" / name
         shutil.copytree(SAMPLE, t, ignore=shutil.ignore_patterns("3_결과물", ".planwit"))
         tasks.append(t)
     return ws, tasks
@@ -187,14 +187,15 @@ def test_service_ids_merge_and_conflict(tmp_path):
     # 두 과제가 같은 번호를 새로 만들면 validate가 잡는다
     problems, notes = v.check_all(a)
     assert any("SCR-020" in p and "next-id" in p for p in problems)
-    assert service.next_id(ws) == "SCR-040" and service.next_id(ws, "POL").startswith("POL-")
+    svc = ws / "서비스A"
+    assert service.next_id(svc) == "SCR-040" and service.next_id(svc, "POL").startswith("POL-")
 
     done, conflicts = service.merge(a)
     assert done and not conflicts
-    assert (paths.service(ws) / "화면" / "SCR-010.md").is_file()
-    base_text = (paths.service(ws) / "화면" / "SCR-010.md").read_text(encoding="utf-8")
+    assert (paths.service(svc) / "화면" / "SCR-010.md").is_file()
+    base_text = (paths.service(svc) / "화면" / "SCR-010.md").read_text(encoding="utf-8")
     assert "· 기준" in base_text and "changed: true" not in base_text and "- 반영: 2026-11-20_가" in base_text
-    assert (paths.service(ws) / "정책.md").is_file() and (paths.service(ws) / "화면목록.md").is_file()
+    assert (paths.service(svc) / "정책.md").is_file() and (paths.service(svc) / "화면목록.md").is_file()
 
     # 기준본에서 가져오지 않고 같은 화면을 고친 과제는 충돌
     done, conflicts = service.merge(b, dry_run=True)
@@ -211,7 +212,7 @@ def test_service_ids_merge_and_conflict(tmp_path):
     assert any("SCR-010" in d and "갱신" in d for d in done)
 
     # 그사이 다른 과제가 기준본을 바꾸면 충돌
-    svc_file = paths.service(ws) / "화면" / "SCR-010.md"
+    svc_file = paths.service(svc) / "화면" / "SCR-010.md"
     svc_file.write_text(svc_file.read_text(encoding="utf-8").replace("로그인", "로그인 화면", 1), encoding="utf-8")
     done, conflicts = service.merge(b, dry_run=True)
     assert any("SCR-010" in c and "먼저 바꿨" in c for c in conflicts)
@@ -252,3 +253,27 @@ def test_plan_page_script_is_valid_js(workspace):
     f.write_text(js, encoding="utf-8")
     r = subprocess.run([node, "--check", str(f)], capture_output=True, text=True)
     assert r.returncode == 0, r.stderr
+
+
+def test_services_are_separate_and_old_layout_moves(tmp_path):
+    """서비스마다 번호와 기준본이 따로이고, 예전 구조는 서비스 폴더 아래로 옮겨진다."""
+    from planwit import paths, service
+
+    ws, (a, b) = _ws_with_tasks(tmp_path)
+    other = ws / "서비스B" / "과제" / "2026-11-22_다"
+    shutil.copytree(SAMPLE, other, ignore=shutil.ignore_patterns("3_결과물", ".planwit"))
+    # 서비스B는 서비스A와 같은 번호를 써도 겹치지 않는다
+    assert service.overlaps(other) == ([], [])
+    assert paths.service_root_of(other) == ws / "서비스B"
+    assert paths.workspace_of(other) == ws.resolve()
+    assert set(p.name for p in paths.all_tasks(ws)) == {"2026-11-20_가", "2026-11-21_나", "2026-11-22_다"}
+
+    old = tmp_path / "old"
+    (old / "회사").mkdir(parents=True)
+    (old / paths.WORKSPACE_MARK).write_text("", encoding="utf-8")
+    shutil.copytree(SAMPLE, old / "과제" / "2026-11-20_예전", ignore=shutil.ignore_patterns("3_결과물", ".planwit"))
+    (old / "서비스" / "화면").mkdir(parents=True)
+    moved = paths.migrate_workspace(old, "앱")
+    assert (old / "앱" / "과제" / "2026-11-20_예전").is_dir() and (old / "앱" / "기준본" / "화면").is_dir()
+    assert not (old / "과제").exists() and not (old / "서비스").exists() and moved
+

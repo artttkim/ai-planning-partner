@@ -52,14 +52,14 @@ description: 플랜윗 최초 설정. 지금 열린 폴더를 플랜윗 작업 �
 <작업 공간>/
 ├─ .planwit-workspace     작업 공간 표시. 내용은 비워 둔다
 ├─ CLAUDE.md              SKILL_DIR/workspace_CLAUDE.md를 복사
-├─ 회사/
-│  ├─ 규칙.md             SKILL_DIR/company_rules.md를 복사
-│  ├─ 양식/
-│  └─ 화면지도/
-└─ 과제/
+└─ 회사/
+   ├─ 규칙.md             SKILL_DIR/company_rules.md를 복사
+   └─ 양식/
 ```
 
-- 예전에 만든 작업 공간(`과제/`, `회사/`, 플랜윗 `CLAUDE.md`가 있음)에 `.planwit-workspace`만 없으면 그 파일만 만든다.
+서비스 폴더(`<서비스>/과제/`, `<서비스>/디자인/`)는 첫 과제를 시작할 때 만든다.
+
+- 예전에 만든 작업 공간(`회사/`와 플랜윗 `CLAUDE.md`가 있음)에 `.planwit-workspace`만 없으면 그 파일만 만든다.
 - 빈 폴더도 git 등에서 사라지지 않도록 만들 필요는 없다. 폴더만 만든다.
 
 ### 3. 결과 알리기

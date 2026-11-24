@@ -37,7 +37,7 @@ def check_all(task_dir: Path) -> tuple[list[str], list[str]]:
     known = set(ids)
     workspace = paths.workspace_of(task_dir)
     if paths.is_workspace(workspace) and not paths.is_service(task_dir):
-        known |= set(service.inventory(workspace)["SCR"])  # 기준본이나 다른 과제의 화면을 가리킬 수 있다
+        known |= set(service.inventory(paths.service_root_of(task_dir))["SCR"])  # 기준본이나 다른 과제의 화면을 가리킬 수 있다
         p2, n2 = service.overlaps(task_dir)
         problems += p2
         notes += n2

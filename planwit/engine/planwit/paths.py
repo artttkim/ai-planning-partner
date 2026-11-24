@@ -1,13 +1,15 @@
 """작업 공간과 과제 폴더 구조. 폴더와 파일 이름은 여기에서만 정한다.
 
 <작업 공간>/
-├─ 회사/              회사 규칙, 디자인 값, 기존 화면 캡처
-├─ 서비스/            서비스 기준본: 끝난 과제를 합친 전체 화면과 정책
-│  ├─ 화면/           SCR-*.md (서비스 전체에서 하나뿐인 화면 번호)
-│  ├─ 정책.md
-│  ├─ 화면목록.md     서비스와 모든 과제의 화면 번호 (엔진이 만든다)
-│  └─ 기획안.html     서비스 전체 프로토타입 (엔진이 만든다)
-└─ 과제/<YYYY-MM-DD>_<과제명>/
+├─ 회사/                  모든 서비스 공통 규칙 (규칙.md)
+└─ <서비스>/              서비스마다 하나 (예: 타이미C)
+   ├─ 기준본/             끝난 과제를 합친 전체 화면과 정책
+   │  ├─ 화면/            SCR-*.md (서비스 안에서 하나뿐인 화면 번호)
+   │  ├─ 정책.md
+   │  ├─ 화면목록.md      기준본과 모든 과제의 화면 번호 (엔진이 만든다)
+   │  └─ 기획안.html      서비스 전체 기획안 (엔진이 만든다)
+   ├─ 디자인/             디자인.css, 화면지도/(기존 화면 캡처)
+   └─ 과제/<YYYY-MM-DD>_<과제명>/
    ├─ 00_과제요약.md  요약, 진행 단계, 결정 기록
    ├─ 01_검수함.md
    ├─ 1_입력자료/     기획자가 준 자료
@@ -31,7 +33,11 @@ OUTPUT = "3_결과물"
 DEV = f"{OUTPUT}/개발용"  # 예전 구조. 지금은 개발명세.md 한 파일
 PLAN = "기획안.html"
 DEV_SPEC = "개발명세.md"
-SERVICE = "서비스"
+SERVICE = "기준본"  # 서비스 폴더 안의 기준본 폴더
+OLD_SERVICE = "서비스"  # 예전: 작업 공간 맨 위의 기준본
+TASKS = "과제"
+DESIGN = "디자인"
+COMPANY = "회사"
 
 # 예전 구조 → 지금 구조
 _OLD = [
@@ -68,7 +74,7 @@ def is_workspace(root: Path) -> bool:
     if (root / WORKSPACE_MARK).is_file():
         return True
     claude = root / "CLAUDE.md"
-    if not ((root / "과제").is_dir() and (root / "회사").is_dir() and claude.is_file()):
+    if not ((root / "회사").is_dir() and claude.is_file()):
         return False
     try:
         text = claude.read_text(encoding="utf-8")
@@ -101,14 +107,79 @@ def dev_spec(task_dir: Path) -> Path:
     return output(task_dir) / DEV_SPEC
 
 
-def workspace_of(task_dir: Path) -> Path:
-    """과제 폴더나 서비스 폴더의 작업 공간."""
-    task_dir = Path(task_dir)
-    return task_dir.parent if task_dir.name == SERVICE else task_dir.parent.parent
+def service_root_of(path: Path) -> Path:
+    """과제 폴더나 기준본 폴더가 속한 서비스 폴더. 예전 구조(작업 공간/과제/...)면 작업 공간."""
+    p = Path(path)
+    if p.name in (SERVICE, OLD_SERVICE) and not (p / TASKS).is_dir():
+        return p.parent
+    if p.parent.name == TASKS:
+        return p.parent.parent
+    return p
 
 
-def service(workspace: Path) -> Path:
-    return Path(workspace) / SERVICE
+def workspace_of(path: Path) -> Path:
+    """위로 올라가며 찾은 플랜윗 작업 공간."""
+    p = Path(path).resolve()
+    for d in (p, *p.parents):
+        if is_workspace(d):
+            return d
+    return service_root_of(p).parent
+
+
+def service(service_root: Path) -> Path:
+    """서비스의 기준본 폴더."""
+    return Path(service_root) / SERVICE
+
+
+def services(workspace: Path) -> list[Path]:
+    ws = Path(workspace)
+    if not ws.is_dir():
+        return []
+    return sorted(d for d in ws.iterdir() if d.is_dir() and not d.name.startswith(".") and d.name != COMPANY
+                  and any((d / x).is_dir() for x in (TASKS, SERVICE, DESIGN)))
+
+
+def all_tasks(workspace: Path) -> list[Path]:
+    """작업 공간의 모든 과제. 서비스 폴더 아래 과제와 예전 구조(작업 공간/과제/)의 과제."""
+    ws = Path(workspace)
+    out = []
+    for root in [*services(ws), ws]:
+        t = root / TASKS
+        if t.is_dir():
+            out += sorted(p for p in t.glob("*/") if p.is_dir())
+    return out
+
+
+def design_css(path: Path) -> Path | None:
+    """서비스 디자인 값. 서비스의 디자인/디자인.css, 없으면 회사/디자인.css."""
+    for c in (service_root_of(path) / DESIGN / "디자인.css", workspace_of(path) / COMPANY / "디자인.css"):
+        if c.is_file():
+            return c
+    return None
+
+
+def migrate_workspace(workspace: Path, service_name: str) -> list[str]:
+    """예전 구조(작업 공간/과제/, 작업 공간/서비스/)를 서비스 폴더 아래로 옮긴다."""
+    ws = Path(workspace)
+    svc = ws / service_name
+    moved = []
+    for src, dst in ((ws / TASKS, svc / TASKS), (ws / OLD_SERVICE, svc / SERVICE),
+                     (ws / COMPANY / "디자인.css", svc / DESIGN / "디자인.css"),
+                     (ws / COMPANY / "화면지도", svc / DESIGN / "화면지도")):
+        if not src.exists() or src == dst:
+            continue
+        if src.is_dir() and not any(src.iterdir()):
+            src.rmdir()
+            continue
+        dst.parent.mkdir(parents=True, exist_ok=True)
+        if dst.exists() and src.is_dir():
+            for f in list(src.iterdir()):
+                shutil.move(str(f), dst / f.name)
+            src.rmdir()
+        else:
+            shutil.move(str(src), dst)
+        moved.append(f"{src.relative_to(ws).as_posix()} → {dst.relative_to(ws).as_posix()}")
+    return moved
 
 
 def is_service(folder: Path) -> bool:

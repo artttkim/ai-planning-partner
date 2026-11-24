@@ -138,7 +138,7 @@ def feedback_cmd(task: str, action: str, fid: str | None, status: str | None, no
 def next_id(task: str, policy: bool) -> int:
     from . import paths, service
 
-    print(service.next_id(paths.workspace_of(Path(task).resolve()), "POL" if policy else "SCR"))
+    print(service.next_id(paths.service_root_of(Path(task).resolve()), "POL" if policy else "SCR"))
     return 0
 
 
@@ -170,10 +170,11 @@ def merge(task: str, dry_run: bool) -> int:
     if not done and not conflicts:
         print("기준본과 달라진 것이 없어요.")
     if not dry_run and not conflicts and done:
-        svc = paths.service(paths.workspace_of(task_dir))
+        root = paths.service_root_of(task_dir)
+        svc = paths.service(root)
         build_proto.build(svc, capture=False)
         build_dev.build(svc)
-        print(f"서비스 기준본 갱신: {paths.SERVICE}/{paths.PLAN}, {paths.SERVICE}/{paths.DEV_SPEC}, {paths.SERVICE}/화면목록.md")
+        print(f"기준본 갱신: {root.name}/{paths.SERVICE}/{paths.PLAN}, {paths.DEV_SPEC}, 화면목록.md")
     return 1 if conflicts else 0
 
 
@@ -233,19 +234,24 @@ def detect(workspace: str | None, hook: bool) -> int:
 def _migrate_tasks(root: Path):
     """작업 공간의 과제/ 아래 과제만 옮긴다. 작업 공간 밖은 건드리지 않는다."""
     from . import paths
-    for task in sorted((root / "과제").glob("*/")):
+    for task in paths.all_tasks(root):
         if task.is_dir():
             moved = paths.migrate(task)
             if moved:
                 print(f"{task.name}: " + ", ".join(moved))
 
 
-def migrate(workspace) -> int:
+def migrate(workspace, service_name: str | None = None) -> int:
     from . import paths
     root = Path(workspace or Path.cwd())
     if not paths.is_workspace(root):
         print(f"플랜윗 작업 공간이 아님: {root}", file=sys.stderr)
         return 1
+    if service_name:
+        for m in paths.migrate_workspace(root, service_name):
+            print(m)
+    elif (root / paths.TASKS).is_dir() or (root / paths.OLD_SERVICE).is_dir():
+        print("안내: 과제가 서비스 폴더 밖에 있어요. 'migrate --service <서비스 이름>'으로 서비스 폴더 아래로 옮길 수 있어요.")
     _migrate_tasks(root)
     return 0
 
@@ -292,6 +298,7 @@ def main(argv=None) -> int:
     e.add_argument("--out")
     mg = sub.add_parser("migrate", help="예전 구조의 과제 폴더를 지금 구조로 옮기기")
     mg.add_argument("workspace", nargs="?")
+    mg.add_argument("--service", help="예전 구조의 과제와 기준본을 이 이름의 서비스 폴더 아래로 옮긴다")
     dt = sub.add_parser("detect", help="직접 고친 회사 양식 파일 감지")
     dt.add_argument("workspace", nargs="?")
     dt.add_argument("--hook", action="store_true")
@@ -321,5 +328,5 @@ def main(argv=None) -> int:
     if args.command == "detect":
         return detect(args.workspace, args.hook)
     if args.command == "migrate":
-        return migrate(args.workspace)
+        return migrate(args.workspace, args.service)
     return 2
