@@ -99,6 +99,42 @@ def validate(task: str) -> int:
     return 1
 
 
+def serve(task: str, port: int, no_open: bool) -> int:
+    from . import build_proto, feedback, paths
+
+    task_dir = Path(task).resolve()
+    if not (paths.output_of(task_dir) / paths.PLAN).is_file():
+        build_proto.build(task_dir, capture=False)
+    feedback.serve(task_dir, port=port, open_browser=not no_open)
+    return 0
+
+
+def feedback_cmd(task: str, action: str, fid: str | None, status: str | None, note: str) -> int:
+    from . import feedback
+
+    task_dir = Path(task).resolve()
+    if action == "list":
+        items = feedback.pending(task_dir)
+        if not items:
+            print("새 피드백 없음")
+            return 0
+        for i in items:
+            where = f"{i['screen']}" + (f" / {i['cid']} ({i['label']})" if i.get("cid") else " / 화면 전체")
+            body = f"문구 \"{i.get('before')}\" → \"{i.get('after')}\"" if i["kind"] == "문구" else i["text"]
+            extra = f" | 앞서 플랜윗 질문: {i['answer']} | 기획자 답: {i['reply']}" if i.get("reply") else ""
+            print(f"{i['id']} | {where} | {body}{extra}")
+        return 0
+    if action == "set":
+        try:
+            item = feedback.set_status(task_dir, fid or "", status or "", note)
+        except ValueError as e:
+            print(e)
+            return 1
+        print(f"{fid}: {status}" if item else f"{fid}: 없음")
+        return 0 if item else 1
+    return 2
+
+
 def next_id(task: str, policy: bool) -> int:
     from . import paths, service
 
@@ -175,6 +211,10 @@ def detect(workspace: str | None, hook: bool) -> int:
                 return 0
             _migrate_tasks(root)
             msg = d.scan(root)
+            from . import feedback as fbm
+            fmsg = fbm.pending_message(root)
+            if fmsg:
+                msg = (msg + "\n\n" if msg else "") + fmsg
         except Exception:
             return 0
     else:
@@ -226,6 +266,16 @@ def main(argv=None) -> int:
     b.add_argument("task", help="과제 폴더 경로")
     b.add_argument("--version", dest="doc_version", default="v0.1", help="문서 버전 (기본 v0.1)")
     b.add_argument("--look", choices=["wire", "design"], help="화면 그림: wire(와이어프레임), design(디자인 화면). 과제에 저장된다")
+    sv = sub.add_parser("serve", help="기획안을 이 PC 안에서 열고 피드백 받기")
+    sv.add_argument("task")
+    sv.add_argument("--port", type=int, default=0)
+    sv.add_argument("--no-open", action="store_true")
+    fbp = sub.add_parser("feedback", help="기획안 피드백 보기(list)와 상태 바꾸기(set)")
+    fbp.add_argument("task")
+    fbp.add_argument("action", choices=["list", "set"])
+    fbp.add_argument("id", nargs="?")
+    fbp.add_argument("status", nargs="?", help="반영함, 질문, 닫힘")
+    fbp.add_argument("--note", default="", help="기획자에게 보일 플랜윗의 답이나 질문")
     ni = sub.add_parser("next-id", help="서비스 전체에서 아직 쓰지 않은 다음 화면(또는 정책) 번호")
     ni.add_argument("task")
     ni.add_argument("--policy", action="store_true")
@@ -256,6 +306,10 @@ def main(argv=None) -> int:
         return build(args.kind, args.task, args.doc_version, args.look)
     if args.command == "validate":
         return validate(args.task)
+    if args.command == "serve":
+        return serve(args.task, args.port, args.no_open)
+    if args.command == "feedback":
+        return feedback_cmd(args.task, args.action, args.id, args.status, args.note)
     if args.command == "next-id":
         return next_id(args.task, args.policy)
     if args.command == "base":

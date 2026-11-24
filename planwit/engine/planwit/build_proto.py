@@ -521,6 +521,26 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-hl { outline: 2px dashed #2f6fed !important; outline-offset: 2px; }
 .pw-code { margin-top: 14px; }
 .pw-code button { font: inherit; font-size: 12px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.pw-fb { margin-top: 22px; border-top: 1px solid #e3e5e8; padding-top: 14px; }
+.pw-fb-h { font-weight: 700; margin-bottom: 8px; }
+.pw-fb textarea { width: 100%; min-height: 64px; font: inherit; font-size: 13px; border: 1px solid #c9ccd2; border-radius: 8px; padding: 8px; resize: vertical; }
+.pw-fb .row2 { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
+.pw-fb button { font: inherit; font-size: 12px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+.pw-fb button.main { background: #2f3441; color: #fff; border-color: #2f3441; }
+.pw-fb button.on { background: #2f6fed; color: #fff; border-color: #2f6fed; }
+.pw-chip { display: inline-flex; gap: 4px; align-items: center; background: #f0f4ff; color: #2f4fa8; border-radius: 6px; padding: 3px 8px; font-size: 12px; }
+.pw-chip b { cursor: pointer; font-weight: 400; }
+.pw-fbi { border: 1px solid #eceef1; border-radius: 8px; padding: 8px 10px; margin-top: 8px; font-size: 12px; line-height: 1.5; }
+.pw-fbi .st { display: inline-block; border-radius: 4px; padding: 0 6px; margin-right: 6px; font-weight: 600; }
+.pw-fbi .st.s대기 { background: #fff4e0; color: #b8660b; }
+.pw-fbi .st.s반영함 { background: #e7f6ec; color: #1e7b3c; }
+.pw-fbi .st.s질문 { background: #fde8e8; color: #c43030; }
+.pw-fbi .st.s닫힘 { background: #eceef1; color: #8a8f98; }
+.pw-fbi .ans { color: #4a5160; margin-top: 4px; }
+.pw-fbi input { width: 100%; font: inherit; font-size: 12px; border: 1px solid #c9ccd2; border-radius: 6px; padding: 5px 7px; margin-top: 6px; }
+body.pw-picking .pw-phone, body.pw-picking .pw-phone * { cursor: crosshair !important; }
+[contenteditable="true"] { outline: 2px solid #2f6fed !important; background: #fff; }
+#pw-fbcount { color: #b8660b; font-weight: 600; }
 .pw-code pre { margin-top: 8px; background: #f5f6f8; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.45; overflow: auto; max-height: 320px; white-space: pre; }
 """
 
@@ -573,13 +593,49 @@ _SHELL_JS = """
     try { document.execCommand('copy'); } catch (e) {}
     ta.remove();
   }
+  // ---------- 피드백 (serve로 열었을 때) ----------
+  var served = location.protocol.indexOf('http') === 0, fb = [], pick = false, picked = null;
+  function post(url, d){
+    return fetch(url, {method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(d)}).then(function(r){ return r.json(); });
+  }
+  function loadFb(){
+    if (!served) return;
+    fetch('/api/feedback').then(function(r){ return r.json(); }).then(function(d){ fb = d.items || []; renderFb(); });
+  }
+  function renderFb(){
+    var box = document.getElementById('pw-fb'); if (!box) return;
+    var old = document.getElementById('pw-fbtext'), keep = old ? old.value : '', focused = document.activeElement === old;
+    var n = fb.filter(function(i){ return i.status === '대기'; }).length, c = document.getElementById('pw-fbcount');
+    if (c) c.textContent = n ? '피드백 ' + n + '개 남김' : '';
+    var h = '<div class="pw-fb-h">피드백</div>';
+    if (!served){
+      box.innerHTML = h + '<div class="pw-sub">Claude에게 "기획안 열어 줘"라고 해서 연 기획안에서 피드백을 남길 수 있어요.</div>';
+      return;
+    }
+    h += '<div class="row2"><span class="pw-chip">' + (picked ? '요소: ' + esc(picked.label) + ' <b id="pw-unpick">×</b>' : '이 화면 전체') + '</span>' +
+         '<button id="pw-pick" class="' + (pick ? 'on' : '') + '">' + (pick ? '화면에서 요소를 누르세요' : '요소 고르기') + '</button></div>';
+    h += '<textarea id="pw-fbtext" placeholder="이 화면에서 바꿀 점을 그냥 적어 주세요. 예: 이 토글은 반복 화면 안으로"></textarea>';
+    h += '<div class="row2"><button class="main" id="pw-fbsend">남기기</button><span class="pw-sub" style="margin:0">글자를 두 번 누르면 그 자리에서 고칠 수 있어요</span></div>';
+    fb.filter(function(i){ return i.screen === cur; }).reverse().forEach(function(i){
+      h += '<div class="pw-fbi"><span class="st s' + esc(i.status) + '">' + esc(i.status) + '</span>' +
+           (i.label ? '<b>' + esc(i.label) + '</b> ' : '') +
+           (i.kind === '문구' ? '문구 "' + esc(i.before || '') + '" → "' + esc(i.after || '') + '"' : esc(i.text)) +
+           (i.answer ? '<div class="ans">플랜윗: ' + esc(i.answer) + '</div>' : '') +
+           (i.reply ? '<div class="ans">나: ' + esc(i.reply) + '</div>' : '') +
+           (i.status === '질문' ? '<input data-reply="' + esc(i.id) + '" placeholder="답을 적고 Enter">' : '') + '</div>';
+    });
+    box.innerHTML = h;
+    var nt = document.getElementById('pw-fbtext');
+    if (nt){ nt.value = keep; if (focused) nt.focus(); }
+  }
   function desc(id){
     var d = data[id], h = '<div class="pw-tabs"><button data-view="desc" class="' + (view === 'desc' ? 'on' : '') + '">설명</button>' +
       '<button data-view="dev" class="' + (view === 'dev' ? 'on' : '') + '">개발 보기</button></div>';
     h += '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
     h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + '</div>';
     if (view === 'dev'){
-      document.querySelector('.pw-desc').innerHTML = h + dev(id);
+      document.querySelector('.pw-desc').innerHTML = h + dev(id) + '<div class="pw-fb" id="pw-fb"></div>';
+      renderFb();
       return;
     }
     if (d.rows.length){
@@ -591,7 +647,8 @@ _SHELL_JS = """
       h += '</table>';
     }
     if (d.note) h += '<div class="note">비고: ' + esc(d.note) + '</div>';
-    document.querySelector('.pw-desc').innerHTML = h;
+    document.querySelector('.pw-desc').innerHTML = h + '<div class="pw-fb" id="pw-fb"></div>';
+    renderFb();
   }
   function show(id, push){
     var sec = document.getElementById(id); if (!sec) return;
@@ -607,6 +664,16 @@ _SHELL_JS = """
     if (p) show(p, false);
   }
   phone.addEventListener('click', function(e){
+    if (pick){
+      e.preventDefault(); e.stopPropagation();
+      var t = e.target.closest('[data-cid]');
+      if (t && !t.closest('.bg')){
+        picked = {cid: t.getAttribute('data-cid'), label: (t.innerText || '').trim().split(String.fromCharCode(10))[0].slice(0, 30) || t.getAttribute('data-cid')};
+      }
+      pick = false; document.body.classList.remove('pw-picking'); renderFb();
+      return;
+    }
+    if (e.target.closest('[contenteditable="true"]')) return;
     var el = e.target.closest('[data-go], [data-back]');
     if (!el || el.closest('.bg')) return;
     e.preventDefault();
@@ -617,16 +684,43 @@ _SHELL_JS = """
   });
   document.getElementById('pw-back').addEventListener('click', back);
   document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
+  phone.addEventListener('dblclick', function(e){
+    if (!served) return;
+    var el = e.target.closest('[data-cid]');
+    if (!el || el.closest('.bg') || el.querySelector('[data-cid]') || el.closest('[data-go], [data-back]')) return;
+    var before = (el.innerText || '').trim(); if (!before) return;
+    el.setAttribute('contenteditable', 'true'); el.focus();
+    function done(){
+      el.removeAttribute('contenteditable'); el.removeEventListener('blur', done);
+      var after = (el.innerText || '').trim();
+      if (after && after !== before){
+        post('/api/feedback', {screen: cur, cid: el.getAttribute('data-cid'), label: before.slice(0, 30), kind: '문구', before: before, after: after}).then(loadFb);
+      }
+    }
+    el.addEventListener('blur', done);
+    el.addEventListener('keydown', function(k){ if (k.key === 'Enter'){ k.preventDefault(); el.blur(); } if (k.key === 'Escape'){ el.innerText = before; el.blur(); } });
+  });
   var panel = document.querySelector('.pw-desc');
   panel.addEventListener('click', function(e){
     var b = e.target.closest('[data-view]');
     if (b){ view = b.getAttribute('data-view'); desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
     if (e.target.id === 'pw-copy'){ copyText(data[cur].yaml); e.target.textContent = '복사했어요'; }
+    if (e.target.id === 'pw-pick'){ pick = !pick; document.body.classList.toggle('pw-picking', pick); renderFb(); }
+    if (e.target.id === 'pw-unpick'){ picked = null; renderFb(); }
+    if (e.target.id === 'pw-fbsend'){
+      var t = document.getElementById('pw-fbtext'), text = t.value.trim(); if (!text) return;
+      t.value = '';
+      post('/api/feedback', {screen: cur, cid: picked && picked.cid, label: picked ? picked.label : '', kind: '메모', text: text}).then(function(){ picked = null; loadFb(); });
+    }
   });
   function hl(id, on){
     var sec = document.getElementById(cur); if (!sec) return;
     sec.querySelectorAll('.screen:not(.bg) [data-cid="' + id + '"]').forEach(function(el){ el.classList.toggle('pw-hl', on); });
   }
+  panel.addEventListener('keydown', function(e){
+    var id = e.target.getAttribute && e.target.getAttribute('data-reply');
+    if (id && e.key === 'Enter' && e.target.value.trim()){ post('/api/feedback/' + id + '/reply', {text: e.target.value}).then(loadFb); }
+  });
   panel.addEventListener('mouseover', function(e){ var r = e.target.closest('[data-hl]'); if (r) hl(r.getAttribute('data-hl'), true); });
   panel.addEventListener('mouseout', function(e){ var r = e.target.closest('[data-hl]'); if (r) hl(r.getAttribute('data-hl'), false); });
   document.getElementById('pw-marks').addEventListener('change', function(e){ document.body.classList.toggle('no-marks', !e.target.checked); });
@@ -634,6 +728,12 @@ _SHELL_JS = """
   var hash = location.hash.slice(1).split('~'), start = hash[0];
   if (hash[1] === 'dev') view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
+  loadFb();
+  if (served) setInterval(function(){
+    var a = document.activeElement;
+    if (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable)) return;
+    loadFb();
+  }, 15000);
 })();
 </script>
 """
@@ -675,7 +775,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
             f'<body class="pw"><nav class="pw-list"><div class="pw-title">{_t(title)}</div>'
             f'<div class="pw-sub">기획안 초안 · 디자인 시안이 아니에요. 개발 명세는 같은 폴더의 개발명세.md</div>{links}</nav>'
             f'<div class="pw-stage"><div class="pw-bar"><button id="pw-home">처음으로</button>'
-            f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label></div>'
+            f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label><span id="pw-fbcount"></span></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
             f'<script type="application/json" id="pw-data">{payload}</script>{_SHELL_JS}</body></html>')
 

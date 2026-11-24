@@ -49,6 +49,7 @@
 | 추가 자료, 회의 결과를 반영해 달라고 함 | `planwit:sync` |
 | 파일을 다시 만들어 달라고 함 | `planwit:export` |
 | "현황", "어디까지 했어?" | `planwit:status` |
+| "기획안 열어 줘", "피드백 반영해 줘", 새 피드백 알림 | `planwit:feedback` |
 | "기준본에 합쳐 줘", "과제 합치기" | `planwit:merge` |
 | "피그마로 보내 줘", "디자인 파일로 만들어 줘" | `planwit:figma` |
 

@@ -216,3 +216,39 @@ def test_service_ids_merge_and_conflict(tmp_path):
     done, conflicts = service.merge(b, dry_run=True)
     assert any("SCR-010" in c and "먼저 바꿨" in c for c in conflicts)
 
+
+
+def test_feedback_store_and_hook_message(tmp_path):
+    from planwit import feedback
+
+    ws = tmp_path / "ws"
+    task = ws / "과제" / "2026-11-24_예시"
+    task.mkdir(parents=True)
+    a = feedback.add(task, {"screen": "SCR-010", "cid": "c3", "label": "버튼", "kind": "메모", "text": "위로 올려 줘"})
+    b = feedback.add(task, {"screen": "SCR-010", "kind": "문구", "before": "확인", "after": "저장하기"})
+    assert (a["id"], b["id"]) == ("F001", "F002")
+    assert len(feedback.pending(task)) == 2 and "새 피드백 2개" in feedback.pending_message(ws)
+    feedback.set_status(task, "F001", "질문", "어디까지 올릴까요?")
+    feedback.set_status(task, "F002", "반영함")
+    assert feedback.pending(task) == [] and feedback.pending_message(ws) == ""
+    feedback.reply(task, "F001", "상단바 바로 아래")
+    item = feedback.pending(task)[0]
+    assert item["id"] == "F001" and item["reply"] == "상단바 바로 아래" and item["answer"] == "어디까지 올릴까요?"
+
+
+def test_plan_page_script_is_valid_js(workspace):
+    """기획안의 스크립트가 문법 오류 없이 읽히는지 (node가 있을 때만)."""
+    import re
+    import subprocess
+
+    node = shutil.which("node")
+    if not node:
+        pytest.skip("node 없음")
+    from planwit import build_proto
+
+    out = build_proto.build(_task(workspace), capture=False)[0]
+    js = re.findall(r"<script>(.*?)</script>", out.read_text(encoding="utf-8"), re.S)[-1]
+    f = out.parent / "check.js"
+    f.write_text(js, encoding="utf-8")
+    r = subprocess.run([node, "--check", str(f)], capture_output=True, text=True)
+    assert r.returncode == 0, r.stderr
