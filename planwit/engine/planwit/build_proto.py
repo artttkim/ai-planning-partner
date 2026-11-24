@@ -521,7 +521,7 @@ body.no-marks .pw-mk, body.no-marks .pw-box { display: none; }
 .pw-hl { outline: 2px dashed #2f6fed !important; outline-offset: 2px; }
 .pw-code { margin-top: 14px; }
 .pw-code button { font: inherit; font-size: 12px; border: 1px solid #c9ccd2; background: #fff; border-radius: 8px; padding: 5px 10px; cursor: pointer; }
-.pw-fb { margin-top: 22px; border-top: 1px solid #e3e5e8; padding-top: 14px; }
+.pw-fb { margin-top: 6px; }
 .pw-fb-h { font-weight: 700; margin-bottom: 8px; }
 .pw-fb textarea { width: 100%; min-height: 64px; font: inherit; font-size: 13px; border: 1px solid #c9ccd2; border-radius: 8px; padding: 8px; resize: vertical; }
 .pw-fb .row2 { display: flex; gap: 6px; align-items: center; margin: 6px 0; flex-wrap: wrap; }
@@ -547,6 +547,22 @@ body.pw-editing .pw-phone { border-color: #2f6fed; }
 body.pw-editing .pw-phone [data-cid]:hover { outline: 1px dashed #2f6fed; outline-offset: 1px; }
 .pw-picked { outline: 2px solid #2f6fed !important; outline-offset: 2px; }
 .pw-hint { font-size: 12px; color: #2f4fa8; background: #f0f4ff; border-radius: 8px; padding: 6px 10px; }
+.pw-bar { width: 100%; max-width: 560px; justify-content: center; flex-wrap: wrap; }
+.pw-bar .grow { flex: 1; }
+.pw-primary { font: inherit; font-size: 13px; background: #2f3441 !important; color: #fff !important; border: 0 !important; border-radius: 8px; padding: 7px 14px; cursor: pointer; text-decoration: none; display: inline-block; }
+.pw-primary.sm, button.sm { font-size: 12px; padding: 4px 10px; }
+.pw-busy { font-size: 13px; color: #2f6fed; font-weight: 600; }
+.pw-dot { float: right; min-width: 18px; height: 18px; border-radius: 9px; background: #e8890c; color: #fff; font-size: 11px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; padding: 0 5px; }
+.pw-target { font-size: 12px; color: #4a5160; margin-bottom: 6px; display: flex; gap: 6px; align-items: center; }
+.pw-edit-tip { font-size: 12px; color: #2f6fed; text-align: center; min-height: 16px; }
+.pw-fbi .top { display: flex; align-items: center; gap: 6px; }
+.pw-fbi .tg { font-weight: 600; color: #1b1d21; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.pw-fbi .acts { margin-left: auto; display: flex; gap: 8px; }
+.pw-fbi .acts a { color: #2f6fed; cursor: pointer; font-size: 12px; }
+.pw-fbi .tx { margin-top: 4px; white-space: pre-line; }
+.pw-fbi .ans.me { color: #8a8f98; }
+.pw-fbi .row2 input { flex: 1; margin: 0; }
+.pw-fbi textarea { min-height: 52px; margin-top: 6px; }
 [contenteditable="true"] { outline: 2px solid #2f6fed !important; background: #fff; }
 #pw-ver { color: #8a8f98; font-size: 12px; margin-left: 6px; }
 .pw-code pre { margin-top: 8px; background: #f5f6f8; border-radius: 8px; padding: 10px; font-size: 11px; line-height: 1.45; overflow: auto; max-height: 320px; white-space: pre; }
@@ -620,47 +636,78 @@ _SHELL_JS = """
       renderFb();
     });
   }
+  var STATUS = {'대기': '반영 전', '반영함': '반영됨', '질문': '답 필요', '닫힘': '닫힘'};
+  var editingId = null;
+  function pending(){ return fb.filter(function(i){ return i.status === '대기'; }); }
+  function renderBar(){
+    var box = document.getElementById('pw-applybox'); if (!box) return;
+    var n = pending().length;
+    box.innerHTML = !served ? '' : requested ? '<span class="pw-busy">반영 중…</span>'
+      : n ? '<button class="pw-primary" id="pw-apply">의견 ' + n + '개 반영하기</button>' : '';
+    document.querySelectorAll('.pw-list a').forEach(function(a){
+      var c = fb.filter(function(i){ return i.status === '대기' && i.screen === a.getAttribute('data-to'); }).length;
+      var dot = a.querySelector('.pw-dot');
+      if (c && !dot){ dot = document.createElement('span'); dot.className = 'pw-dot'; a.appendChild(dot); }
+      if (dot){ if (c) dot.textContent = c; else dot.remove(); }
+    });
+  }
+  function itemHtml(i){
+    var h = '<div class="pw-fbi"><div class="top"><span class="st s' + esc(i.status) + '">' + esc(STATUS[i.status] || i.status) + '</span>' +
+            '<span class="tg">' + esc(i.label || '화면 전체') + '</span>';
+    if (i.status === '대기' && i.kind === '메모' && editingId !== i.id)
+      h += '<span class="acts"><a data-act="edit" data-id="' + esc(i.id) + '">수정</a><a data-act="del" data-id="' + esc(i.id) + '">삭제</a></span>';
+    h += '</div>';
+    if (editingId === i.id){
+      h += '<textarea class="pw-edit" data-id="' + esc(i.id) + '">' + esc(i.text) + '</textarea>' +
+           '<div class="row2"><button class="pw-primary sm" data-act="save" data-id="' + esc(i.id) + '">저장</button>' +
+           '<button class="sm" data-act="cancel">취소</button></div>';
+    } else {
+      h += '<div class="tx">' + (i.kind === '문구' ? '"' + esc(i.before || '') + '" → "' + esc(i.after || '') + '"' : esc(i.text)) + '</div>';
+    }
+    if (i.answer) h += '<div class="ans">↳ ' + esc(i.answer) + '</div>';
+    if (i.reply) h += '<div class="ans me">나: ' + esc(i.reply) + '</div>';
+    if (i.status === '질문') h += '<div class="row2"><input data-reply="' + esc(i.id) + '" placeholder="답 적기"><button class="sm" data-act="reply" data-id="' + esc(i.id) + '">답하기</button></div>';
+    return h + '</div>';
+  }
   function renderFb(){
+    renderBar();
+    var tb = document.querySelector('.pw-tabs'); if (tb) tb.outerHTML = tabs();
     var box = document.getElementById('pw-fb'); if (!box) return;
     var old = document.getElementById('pw-fbtext'), keep = old ? old.value : '', focused = document.activeElement === old;
-    var h = '<div class="pw-fb-h">피드백</div>';
+    var h = '';
     if (!served){
       var live = 'http://127.0.0.1:' + data.__port__ + '/#' + cur;
       box.innerHTML = h + (serverUp
-        ? '<div class="pw-hint">피드백은 여기서 남길 수 있어요: <a href="' + live + '">피드백 기획안 열기 →</a></div>'
-        : '<div class="pw-sub">피드백을 남기려면 Claude에게 "기획안 열어 줘"라고 말해 주세요. 피드백 기획안이 따로 열려요.</div>');
+        ? '<a class="pw-primary" href="' + live + '">의견 남기는 화면으로 가기</a>'
+        : '<div class="pw-sub">Claude에게 "기획안 열어 줘"라고 하면 의견을 남길 수 있어요.</div>');
       return;
     }
-    if (mode === 'edit') h += '<div class="pw-hint">고치기: 화면의 글자를 누르면 바로 고쳐져요. 다른 요소를 누르면 그 요소에 메모를 남겨요.</div>';
-    else h += '<div class="pw-sub" style="margin:0 0 6px">위의 "고치기"를 누르면 화면의 글자를 바로 고치거나 요소를 골라 메모할 수 있어요.</div>';
-    h += '<div class="row2"><span class="pw-chip">' + (picked ? '요소: ' + esc(picked.label) + ' <b id="pw-unpick">×</b>' : '이 화면 전체') + '</span></div>';
-    h += '<textarea id="pw-fbtext" placeholder="이 화면에서 바꿀 점을 그냥 적어 주세요. 예: 이 토글은 반복 화면 안으로"></textarea>';
-    h += '<div class="row2"><button class="main" id="pw-fbsend">남기기</button></div>';
-    var waiting = fb.filter(function(i){ return i.status === '대기'; }).length;
-    if (requested) h += '<div class="pw-hint" style="margin-top:8px">반영 중이에요. 다 되면 기획안이 저절로 새로 고쳐져요.</div>';
-    else if (waiting) h += '<div class="row2" style="margin-top:8px"><button class="main" id="pw-apply">남긴 피드백 지금 반영해 줘</button></div>';
-    fb.filter(function(i){ return i.screen === cur; }).reverse().forEach(function(i){
-      h += '<div class="pw-fbi"><span class="st s' + esc(i.status) + '">' + esc(i.status) + '</span>' +
-           (i.label ? '<b>' + esc(i.label) + '</b> ' : '') +
-           (i.kind === '문구' ? '문구 "' + esc(i.before || '') + '" → "' + esc(i.after || '') + '"' : esc(i.text)) +
-           (i.answer ? '<div class="ans">플랜윗: ' + esc(i.answer) + '</div>' : '') +
-           (i.reply ? '<div class="ans">나: ' + esc(i.reply) + '</div>' : '') +
-           (i.status === '질문' ? '<input data-reply="' + esc(i.id) + '" placeholder="답을 적고 Enter">' : '') + '</div>';
-    });
+    h += '<div class="pw-target">대상 <span class="pw-chip">' + (picked ? esc(picked.label) + ' <b id="pw-unpick" title="대상 지우기">×</b>' : '화면 전체') + '</span></div>';
+    h += '<textarea id="pw-fbtext" placeholder="바꿀 점을 적어 주세요"></textarea>';
+    h += '<div class="row2"><button class="pw-primary" id="pw-fbsend">의견 추가</button>' +
+         '<span class="pw-sub" style="margin:0">' + (mode === 'edit' ? '화면에서 요소를 누르면 대상이 돼요' : '"수정하기"에서 대상을 고를 수 있어요') + '</span></div>';
+    var mine = fb.filter(function(i){ return i.screen === cur && i.status !== '닫힘'; });
+    var order = {'질문': 0, '대기': 1, '반영함': 2};
+    mine.sort(function(a, b){ return (order[a.status] - order[b.status]) || (a.id < b.id ? 1 : -1); });
+    h += mine.map(itemHtml).join('');
     box.innerHTML = h;
     var nt = document.getElementById('pw-fbtext');
     if (nt){ nt.value = keep; if (focused) nt.focus(); }
   }
+  function fbCount(id){ return fb.filter(function(i){ return i.screen === id && i.status !== '닫힘'; }).length; }
+  function tabs(){
+    var n = fbCount(cur);
+    function b(v, label){ return '<button data-view="' + v + '" class="' + (view === v ? 'on' : '') + '">' + label + '</button>'; }
+    return '<div class="pw-tabs">' + b('desc', '설명') + b('fb', '의견' + (n ? ' ' + n : '')) + (data.__dev__ ? b('dev', '개발 보기') : '') + '</div>';
+  }
   function desc(id){
-    var d = data[id], h = '<div class="pw-tabs"><button data-view="desc" class="' + (view === 'desc' ? 'on' : '') + '">설명</button>' +
-      (data.__dev__ ? '<button data-view="dev" class="' + (view === 'dev' ? 'on' : '') + '">개발 보기</button>' : '') + '</div>';
+    if (view === 'dev' && !data.__dev__) view = 'desc';
+    var d = data[id], h = tabs();
     h += '<div class="pw-title">' + esc(id + ' ' + d.name) + '</div>';
     h += '<div class="pw-sub">' + esc(d.status) + (d.path ? ' · ' + esc(d.path) : '') + '</div>';
-    if (view === 'dev'){
-      document.querySelector('.pw-desc').innerHTML = h + dev(id) + '<div class="pw-fb" id="pw-fb"></div>';
-      renderFb();
-      return;
-    }
+    var panelEl = document.querySelector('.pw-desc');
+    if (view === 'dev'){ panelEl.innerHTML = h + dev(id); return; }
+    if (view === 'fb'){ panelEl.innerHTML = h + '<div class="pw-fb" id="pw-fb"></div>'; renderFb(); return; }
     if (d.rows.length){
       h += '<table><tr><th>No</th><th>항목</th><th>설명</th></tr>';
       d.rows.forEach(function(r){
@@ -670,8 +717,8 @@ _SHELL_JS = """
       h += '</table>';
     }
     if (d.note) h += '<div class="note">비고: ' + esc(d.note) + '</div>';
-    document.querySelector('.pw-desc').innerHTML = h + '<div class="pw-fb" id="pw-fb"></div>';
-    renderFb();
+    panelEl.innerHTML = h;
+    renderBar();
   }
   function show(id, push){
     var sec = document.getElementById(id); if (!sec) return;
@@ -709,6 +756,8 @@ _SHELL_JS = """
     try { sessionStorage.setItem('pw-mode', m); } catch (e) {} document.body.classList.toggle('pw-editing', m === 'edit');
     document.querySelectorAll('.pw-mode button').forEach(function(b){ b.classList.toggle('on', b.getAttribute('data-mode') === m); });
     if (m === 'play'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); }
+    var tip = document.getElementById('pw-tip');
+    if (tip) tip.textContent = m === 'edit' ? '글자를 누르면 바로 고쳐지고, 다른 요소를 누르면 의견 대상이 돼요' : '';
     renderFb();
   }
   document.querySelectorAll('.pw-mode button').forEach(function(b){ b.addEventListener('click', function(){ setMode(b.getAttribute('data-mode')); }); });
@@ -737,12 +786,29 @@ _SHELL_JS = """
   });
   document.getElementById('pw-back').addEventListener('click', back);
   document.getElementById('pw-home').addEventListener('click', function(){ hist = []; show(data.__start__ ? data.__start__ : Object.keys(data)[0]); });
+  document.getElementById('pw-applybox').addEventListener('click', function(e){
+    if (e.target.id === 'pw-apply'){ requested = true; renderBar(); post('/api/request', {}).then(loadFb); }
+  });
   var panel = document.querySelector('.pw-desc');
   panel.addEventListener('click', function(e){
+    var act = e.target.getAttribute && e.target.getAttribute('data-act'), fid = e.target.getAttribute && e.target.getAttribute('data-id');
+    if (act === 'edit'){ editingId = fid; renderFb(); return; }
+    if (act === 'cancel'){ editingId = null; renderFb(); return; }
+    if (act === 'save'){
+      var ta = panel.querySelector('textarea.pw-edit'); var t = ta ? ta.value.trim() : '';
+      editingId = null;
+      if (t) post('/api/feedback/' + fid + '/edit', {text: t}).then(loadFb); else renderFb();
+      return;
+    }
+    if (act === 'del'){ if (confirm('이 의견을 지울까요?')) post('/api/feedback/' + fid + '/delete', {}).then(loadFb); return; }
+    if (act === 'reply'){
+      var inp = panel.querySelector('input[data-reply="' + fid + '"]');
+      if (inp && inp.value.trim()) post('/api/feedback/' + fid + '/reply', {text: inp.value}).then(loadFb);
+      return;
+    }
     var b = e.target.closest('[data-view]');
-    if (b){ view = b.getAttribute('data-view'); desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
+    if (b){ view = b.getAttribute('data-view'); try { sessionStorage.setItem('pw-view', view); } catch (x) {} desc(cur); if (history.replaceState) history.replaceState(null, '', '#' + cur + (view === 'dev' ? '~dev' : '')); return; }
     if (e.target.id === 'pw-copy'){ copyText(data[cur].yaml); e.target.textContent = '복사했어요'; }
-    if (e.target.id === 'pw-apply'){ post('/api/request', {}).then(loadFb); }
     if (e.target.id === 'pw-unpick'){ picked = null; document.querySelectorAll('.pw-picked').forEach(function(x){ x.classList.remove('pw-picked'); }); renderFb(); }
     if (e.target.id === 'pw-fbsend'){
       var t = document.getElementById('pw-fbtext'), text = t.value.trim(); if (!text) return;
@@ -763,6 +829,7 @@ _SHELL_JS = """
   document.getElementById('pw-marks').addEventListener('change', function(e){ document.body.classList.toggle('no-marks', !e.target.checked); });
   window.addEventListener('resize', function(){ var s = document.querySelector('.scr.on'); if (s) marks(s); });
   var hash = location.hash.slice(1).split('~'), start = hash[0];
+  try { var sv = sessionStorage.getItem('pw-view'); if (sv) view = sv; } catch (x) {}
   if (hash[1] === 'dev' && data.__dev__) view = 'dev';
   show(document.getElementById(start) ? start : data.__start__, false);
   loadFb();
@@ -772,7 +839,7 @@ _SHELL_JS = """
   }
   if (served) setInterval(function(){
     var a = document.activeElement;
-    if (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable)) return;
+    if (editingId || (a && (a.id === 'pw-fbtext' || a.hasAttribute('data-reply') || a.isContentEditable))) return;
     loadFb();
   }, 3000);
 })();
@@ -822,10 +889,10 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
             f'<style>{css}\n{_SHELL_CSS}</style></head>'
             f'<body class="pw"><nav class="pw-list"><div class="pw-title">{_t(title)}</div>'
             f'<div class="pw-sub">기획안 · 화면 모양은 초안이에요 (디자인은 피그마)</div>{links}</nav>'
-            f'<div class="pw-stage"><div class="pw-bar"><button id="pw-home">처음으로</button>'
-            f'<button id="pw-back">뒤로</button><label><input type="checkbox" id="pw-marks" checked>번호 보기</label>'
-            f'<span class="pw-mode" style="display:none"><button data-mode="play" class="on">눌러 보기</button><button data-mode="edit">고치기</button></span>'
-            f'<span id="pw-ver">{_t(version)}</span></div>'
+            f'<div class="pw-stage"><div class="pw-bar"><button id="pw-back">← 뒤로</button><button id="pw-home">처음 화면</button>'
+            f'<span class="pw-mode" style="display:none"><button data-mode="play" class="on">둘러보기</button><button data-mode="edit">수정하기</button></span>'
+            f'<label><input type="checkbox" id="pw-marks" checked>번호</label><span class="grow"></span><span id="pw-applybox"></span></div>'
+            f'<div class="pw-edit-tip" id="pw-tip"></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
             f'<script type="application/json" id="pw-data">{payload}</script>{_SHELL_JS}</body></html>')
 

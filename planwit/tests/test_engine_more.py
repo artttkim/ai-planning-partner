@@ -306,3 +306,17 @@ def test_text_feedback_applies_to_source(workspace):
     s2 = next(x for x in load_screens(task) if x.id == "SCR-010")
     assert next(c for top in s2.components for c in top.walk() if c.id == leaf.id).label == "새 문구, 쉼표: 포함"
     assert not feedback.apply_text(task, {"kind": "문구", "screen": "SCR-010", "cid": leaf.id, "before": "다른 글자", "after": "x"})
+
+
+def test_feedback_edit_delete_only_before_applied(tmp_path):
+    from planwit import feedback
+
+    task = tmp_path / "t"
+    task.mkdir()
+    a = feedback.add(task, {"screen": "SCR-010", "kind": "메모", "text": "처음"})
+    b = feedback.add(task, {"screen": "SCR-010", "kind": "메모", "text": "둘째"})
+    assert feedback.edit(task, a["id"], "고친 의견")["text"] == "고친 의견"
+    feedback.set_status(task, b["id"], "반영함")
+    assert feedback.edit(task, b["id"], "x") is None and not feedback.delete(task, b["id"])
+    assert feedback.delete(task, a["id"])
+    assert [i["id"] for i in feedback.load(task)] == [b["id"]]

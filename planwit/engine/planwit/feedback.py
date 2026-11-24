@@ -81,6 +81,29 @@ def reply(task_dir: Path, fid: str, text: str) -> dict | None:
     return None
 
 
+def edit(task_dir: Path, fid: str, text: str) -> dict | None:
+    """반영 전 메모만 고칠 수 있다."""
+    with _lock:
+        items = load(task_dir)
+        for i in items:
+            if i["id"] == fid and i["status"] == "대기" and i["kind"] == "메모":
+                i["text"] = text.strip()[:2000]
+                save(task_dir, items)
+                return i
+    return None
+
+
+def delete(task_dir: Path, fid: str) -> bool:
+    """반영 전 의견만 지울 수 있다."""
+    with _lock:
+        items = load(task_dir)
+        keep = [i for i in items if not (i["id"] == fid and i["status"] == "대기")]
+        if len(keep) == len(items):
+            return False
+        save(task_dir, keep)
+        return True
+
+
 def set_status(task_dir: Path, fid: str, status: str, note: str = "") -> dict | None:
     if status not in STATUSES:
         raise ValueError(f"상태는 {', '.join(STATUSES)} 중 하나예요.")
@@ -296,6 +319,12 @@ def serve(task_dir: Path, port: int = 0, open_browser: bool = True, idle_hours: 
                 fid = self.path.split("/")[3]
                 item = reply(task_dir, fid, str(data.get("text", "")))
                 return self._json(item or {"error": "not found"}, 200 if item else 404)
+            if self.path.startswith("/api/feedback/") and self.path.endswith("/edit"):
+                item = edit(task_dir, self.path.split("/")[3], str(data.get("text", "")))
+                return self._json(item or {"error": "반영 전 메모만 고칠 수 있어요"}, 200 if item else 409)
+            if self.path.startswith("/api/feedback/") and self.path.endswith("/delete"):
+                ok = delete(task_dir, self.path.split("/")[3])
+                return self._json({"ok": ok}, 200 if ok else 409)
             if self.path.startswith("/api/feedback/") and self.path.endswith("/close"):
                 item = set_status(task_dir, self.path.split("/")[3], "닫힘")
                 return self._json(item or {"error": "not found"}, 200 if item else 404)
