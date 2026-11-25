@@ -265,9 +265,71 @@ class _Html:
         return f'<div {_attrs(c, "box")}>{_t(c.label)}{self.kids(c)}</div>'
 
 
+_SNAP = """
+<script>
+/* 캡처 화면 보정: 상자를 캡처 속 요소 테두리에 맞추고, 새 영역과 덮는 영역의 바탕색을 캡처에서 가져온다 */
+window.__pwSnap = (function(){
+  var jobs = [];
+  document.querySelectorAll('.cap-wrap').forEach(function(wrap){
+    var m = (wrap.style.getPropertyValue('--cap') || '').match(/url\\(["']?([^"')]+)["']?\\)/);
+    if (!m) return;
+    jobs.push(new Promise(function(done){
+      var im = new Image();
+      im.onload = function(){ try { snap(wrap, im); } catch (e) {} done(); };
+      im.onerror = function(){ done(); };
+      im.src = m[1];
+    }));
+  });
+  function snap(wrap, im){
+    var fw = parseFloat(wrap.style.width), s = im.naturalWidth / fw;
+    var cv = document.createElement('canvas'); cv.width = im.naturalWidth; cv.height = im.naturalHeight;
+    var cx = cv.getContext('2d'); cx.drawImage(im, 0, 0);
+    var W = cv.width, H = cv.height, px = cx.getImageData(0, 0, W, H).data;
+    function at(x, y){ var i = (y * W + x) * 4; return [px[i], px[i + 1], px[i + 2]]; }
+    function dist(a, b){ return Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]); }
+    function bgOf(x0, y0, x1, y1){
+      var cnt = {}, best = null, bn = 0;
+      function add(x, y){ var c = at(x, y), k = (c[0] >> 3) + ',' + (c[1] >> 3) + ',' + (c[2] >> 3);
+        cnt[k] = (cnt[k] || 0) + 1; if (cnt[k] > bn){ bn = cnt[k]; best = c; } }
+      for (var x = x0; x < x1; x++){ add(x, y0); add(x, y1 - 1); }
+      for (var y = y0; y < y1; y++){ add(x0, y); add(x1 - 1, y); }
+      return best;
+    }
+    wrap.querySelectorAll('.cap-gap').forEach(function(g){
+      var y = Math.max(0, Math.min(H - 1, Math.round(parseFloat(g.getAttribute('data-y')) * s) - 2));
+      g.style.background = 'rgb(' + at(Math.min(W - 1, Math.round(4 * s)), y).join(',') + ')';
+    });
+    wrap.querySelectorAll('[data-o]').forEach(function(el){
+      var o = el.getAttribute('data-o').split(',').map(Number), shift = parseFloat(el.getAttribute('data-shift')) || 0, M = 6;
+      var x0 = Math.max(0, Math.floor((o[0] - M) * s)), y0 = Math.max(0, Math.floor((o[1] - M) * s));
+      var x1 = Math.min(W, Math.ceil((o[0] + o[2] + M) * s)), y1 = Math.min(H, Math.ceil((o[1] + o[3] + M) * s));
+      if (x1 - x0 < 4 || y1 - y0 < 4) return;
+      var bg = bgOf(x0, y0, x1, y1);
+      if (el.classList.contains('cap-patch')) el.style.background = 'rgb(' + bg.join(',') + ')';
+      if (!el.hasAttribute('data-snap')) return;
+      var bx0 = x1, by0 = y1, bx1 = -1, by1 = -1, n = 0;
+      for (var y = y0; y < y1; y++) for (var x = x0; x < x1; x++){
+        if (dist(at(x, y), bg) > 40){ n++; if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+      }
+      if (n < 6) return;
+      var nx = bx0 / s, ny = by0 / s, nw = (bx1 + 1 - bx0) / s, nh = (by1 + 1 - by0) / s;
+      var ix = Math.max(0, Math.min(nx + nw, o[0] + o[2]) - Math.max(nx, o[0]));
+      var iy = Math.max(0, Math.min(ny + nh, o[1] + o[3]) - Math.max(ny, o[1]));
+      var inter = ix * iy, uni = nw * nh + o[2] * o[3] - inter;
+      if (!uni || inter / uni < 0.5) return;  /* 절반도 안 겹치면 다른 것을 찾은 것: 적은 위치를 그대로 둔다 */
+      var P = 2;
+      el.style.left = (nx - P) + 'px'; el.style.top = (ny - P + shift) + 'px';
+      el.style.width = (nw + 2 * P) + 'px'; el.style.height = (nh + 2 * P) + 'px';
+    });
+  }
+  return Promise.all(jobs).then(function(){ try { window.dispatchEvent(new Event('resize')); } catch (e) {} });
+})();
+</script>
+"""
+
 _COLLECT = """
 <script>
-(function(){
+(window.__pwSnap || Promise.resolve()).then(function(){
   var out = {height: Math.ceil(document.querySelector('.frame').getBoundingClientRect().height), boxes: {}};
   document.querySelectorAll('.screen:not(.bg) [data-cid]').forEach(function(el){
     var r = el.getBoundingClientRect();
@@ -275,7 +337,7 @@ _COLLECT = """
   });
   var pre = document.createElement('pre'); pre.id = 'planwit-boxes'; pre.style.display = 'none';
   pre.textContent = JSON.stringify(out); document.body.appendChild(pre);
-})();
+});
 </script>
 """
 
@@ -347,48 +409,157 @@ def _data_uri(path: Path) -> str:
     return _URI_CACHE[path]
 
 
+def image_size(path: Path) -> tuple[int, int]:
+    """그림 파일의 (너비, 높이). PNG, JPEG, GIF, WEBP."""
+    import struct
+    b = Path(path).read_bytes()
+    if b[:8] == b"\x89PNG\r\n\x1a\n":
+        return struct.unpack(">II", b[16:24])
+    if b[:6] in (b"GIF87a", b"GIF89a"):
+        return struct.unpack("<HH", b[6:10])
+    if b[:4] == b"RIFF" and b[8:12] == b"WEBP":
+        kind = b[12:16]
+        if kind == b"VP8X":
+            return 1 + int.from_bytes(b[24:27], "little"), 1 + int.from_bytes(b[27:30], "little")
+        if kind == b"VP8 ":
+            w, h = struct.unpack("<HH", b[26:30])
+            return w & 0x3FFF, h & 0x3FFF
+        if kind == b"VP8L":
+            bits = int.from_bytes(b[21:25], "little")
+            return (bits & 0x3FFF) + 1, ((bits >> 14) & 0x3FFF) + 1
+    if b[:2] == b"\xff\xd8":
+        i = 2
+        while i + 9 < len(b):
+            if b[i] != 0xFF:
+                i += 1
+                continue
+            m = b[i + 1]
+            if m in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                h, w = struct.unpack(">HH", b[i + 5:i + 9])
+                return w, h
+            if m in (0xD8, 0x01) or 0xD0 <= m <= 0xD7 or m == 0xFF:
+                i += 1 if m == 0xFF else 2
+                continue
+            i += 2 + struct.unpack(">H", b[i + 2:i + 4])[0]
+    raise ValueError(f"{Path(path).name}: 그림 크기를 읽지 못했어요 (PNG, JPEG, GIF, WEBP만 돼요).")
+
+
 def _placed(c: Component) -> bool:
+    if c.insert or c.removed:
+        return None not in (c.y, c.h)
     return None not in (c.x, c.y, c.w, c.h)
 
 
+def _num(v: float) -> str:
+    return f"{round(float(v), 1):g}"
+
+
 def _capture_body(screen: Screen, img: Path, links: dict[str, str], nav: "_Nav | None") -> tuple[str, str]:
-    """기존 화면 캡처를 바탕으로 깐다. 위치(x, y, w, h)가 있는 요소만 그 자리에 올린다.
+    """기존 화면 캡처를 바탕으로 깐다. 좌표는 모두 원래 캡처 기준(엔진 grid의 눈금)이다.
 
-    - changed: true 요소는 캡처 위에 새로 그려 덮는다 (바뀐 부분)
-    - 나머지는 보이지 않는 상자로 두고 번호, 누르면 이동, 의견 달기에만 쓴다
-    팝업, 바텀시트, 토스트는 평소처럼 위에 그린다."""
+    - 안 바뀐 요소: 보이지 않는 상자. 번호, 누르면 이동, 의견 달기만 맡는다
+    - changed: 그 자리에 새로 그려 덮는다. new_h가 있으면 차이만큼 아래 영역이 밀리거나 올라온다
+    - insert: y 자리에서 캡처를 나눠 높이 h의 새 영역을 넣고 그 안에 그린다. 아래 영역은 그대로 밀려 내려간다
+    - removed: y부터 높이 h 영역을 빼고 아래 영역을 올린다
+    기존 영역은 자르고 옮기기만 하고 다시 그리지 않는다. 화면에서 상자 위치는 캡처 속 요소 테두리에 맞춰 보정한다(_SNAP)."""
+    import dataclasses
+
     fw, _ = FRAMES.get(screen.frame, FRAMES["mobile"])
+    iw, ih = image_size(img)
+    H = ih * fw / iw
     h = _Html(links, nav, screen.id)
-    layers = []
 
-    def place(c: Component):
+    placed: list[Component] = []
+
+    def collect(c: Component):
         if _norm(c.type) in OVERLAYS:
             return
         if not _placed(c):
             for ch in c.children:
-                place(ch)
+                collect(ch)
             return
-        pos = f"left:{c.x}px;top:{c.y}px;width:{c.w}px;height:{c.h}px"
+        placed.append(c)
+        if not (c.changed or c.insert or c.removed):
+            for ch in c.children:
+                collect(ch)
+
+    for c in screen.components:
+        collect(c)
+
+    ops = []  # (원래 위치, 순서, 종류, 크기, 요소 ID)
+    for i, c in enumerate(placed):
+        if c.insert:
+            ops.append((float(c.y), i, "ins", float(c.h), c.id))
+        elif c.removed:
+            ops.append((float(c.y), i, "del", float(c.h), c.id))
+        elif c.changed and c.new_h is not None and float(c.new_h) != float(c.h):
+            d = float(c.new_h) - float(c.h)
+            if d > 0:
+                ops.append((float(c.y) + float(c.h), i, "ins", d, None))
+            else:
+                ops.append((float(c.y) + float(c.new_h), i, "del", -d, None))
+    ops.sort(key=lambda o: (o[0], o[1]))
+
+    strips, gaps, cur, out = [], {}, 0.0, 0.0
+
+    def strip(a: float, b: float):
+        if b - a > 0.05:
+            strips.append(f'<div class="cap-slice" style="height:{_num(b - a)}px;background-position:0 -{_num(a)}px"></div>')
+
+    for pos, _, kind, size, cid in ops:
+        p = min(max(pos, cur), H)
+        strip(cur, p)
+        out += p - cur
+        cur = p
+        if kind == "ins":
+            strips.append(f'<div class="cap-gap" data-y="{_num(p)}" style="height:{_num(size)}px"></div>')
+            if cid:
+                gaps[cid] = out
+            out += size
+        else:
+            cur = min(p + size, H)
+    strip(cur, H)
+
+    def mapped(y: float) -> float:
+        r = y
+        for pos, _, kind, size, _ in ops:
+            if kind == "ins" and pos <= y:
+                r += size
+            elif kind == "del":
+                r -= max(0.0, min(y, pos + size) - pos)
+        return r
+
+    layers = []
+    for c in placed:
+        if c.removed:
+            continue
         a = f'data-cid="{_t(c.id)}"'
         if c.marker is not None:
             a += f' data-marker="{c.marker}"'
         go = links.get(c.id)
         if isinstance(go, str) and go != screen.id:
             a += f' data-go="{_t(go)}"'
-        if c.changed:
-            import dataclasses
-            inner = h.render(dataclasses.replace(c, id=c.id + "~", marker=None, changed=False, h=None))
+        if c.insert:
+            x = c.x if c.x is not None else 16
+            w = c.w if c.w is not None else fw - 2 * 16
+            pos = f"left:{_num(x)}px;top:{_num(gaps[c.id])}px;width:{_num(w)}px;height:{_num(c.h)}px"
+            inner = h.render(dataclasses.replace(c, id=c.id + "~", marker=None, changed=False, insert=False, h=None))
             layers.append(f'<div class="cap-patch" data-changed="1" {a} style="{pos}">{inner}</div>')
-            return
-        layers.append(f'<div class="cap-hot" {a} style="{pos}"></div>')
-        for ch in c.children:
-            place(ch)
+            continue
+        top = mapped(float(c.y))
+        height = c.new_h if (c.changed and c.new_h is not None) else c.h
+        pos = f"left:{_num(c.x)}px;top:{_num(top)}px;width:{_num(c.w)}px;height:{_num(height)}px"
+        o = f' data-o="{_num(c.x)},{_num(c.y)},{_num(c.w)},{_num(c.h)}" data-shift="{_num(top - float(c.y))}"'
+        if c.changed:
+            snap = "" if c.new_h is not None else ' data-snap="1"'
+            inner = h.render(dataclasses.replace(c, id=c.id + "~", marker=None, changed=False, h=None))
+            layers.append(f'<div class="cap-patch" data-changed="1" {a}{o}{snap} style="{pos}">{inner}</div>')
+        else:
+            layers.append(f'<div class="cap-hot" {a}{o} data-snap="1" style="{pos}"></div>')
 
-    for c in screen.components:
-        place(c)
     over = [c for c in screen.components if _norm(c.type) in OVERLAYS]
-    main = (f'<img class="cap-img" alt="{_t(screen.name)}" src="{_data_uri(img)}" style="width:{fw}px">'
-            + "".join(layers))
+    main = (f'<div class="cap-wrap" role="img" aria-label="{_t(screen.name)}" '
+            f'style="width:{fw}px;--cap:url({_data_uri(img)})">{"".join(strips)}{"".join(layers)}</div>')
     return main, "".join(h.render(c) for c in over)
 
 
@@ -434,7 +605,7 @@ def page(screen: Screen, screens_by_id: dict[str, Screen], css: str) -> str:
     return (f'<!doctype html><html lang="ko"><head><meta charset="utf-8">'
             f'<meta name="viewport" content="width={fw}"><title>{_t(screen.id)}</title>'
             f'<style>{css}\n.screen{{width:{fw}px}}</style></head>'
-            f'<body>{screen_markup(screen, screens_by_id)}{_COLLECT}</body></html>')
+            f'<body>{screen_markup(screen, screens_by_id)}{_SNAP}{_COLLECT}</body></html>')
 
 
 # ---------- 캡처 ----------
@@ -1075,7 +1246,7 @@ def bundle(screens: list[Screen], by_id: dict[str, Screen], css: str, title: str
             f'<div class="pw-edit-tip" id="pw-tip"></div>'
             f'<div class="pw-phone">{sections}</div></div><aside class="pw-desc"></aside>'
             f'<div class="pw-doc" id="pw-doc" style="display:none"><div class="pw-docin">{md_to_html(direction)}</div></div>'
-            f'<script type="application/json" id="pw-data">{payload}</script>{_SHELL_JS}</body></html>')
+            f'<script type="application/json" id="pw-data">{payload}</script>{_SNAP}{_SHELL_JS}</body></html>')
 
 
 def build(task_dir: Path, capture: bool = True) -> list[Path]:

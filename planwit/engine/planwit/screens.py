@@ -32,6 +32,9 @@ class Component:
     right: list[str] = field(default_factory=list)   # 상단바 오른쪽 아이콘 (예: 더보기)
     align: str = ""                                   # 글자 정렬: left, center, right
     size: str = ""                                    # 버튼 크기: small
+    insert: bool = False      # 캡처 화면: y 자리에 높이 h의 새 영역을 넣는다 (아래는 밀려 내려간다)
+    removed: bool = False     # 캡처 화면: y부터 높이 h 영역을 뺀다 (아래가 올라온다)
+    new_h: float | None = None  # 캡처 화면: 바뀐 요소의 새 높이 (차이만큼 아래가 밀리거나 올라온다)
 
     def walk(self):
         yield self
@@ -157,6 +160,9 @@ def _component(c: dict, default_id: str) -> Component:
         right=_list(c.get("right")),
         align=str(c.get("align", "") or ""),
         size=str(c.get("size", "") or ""),
+        insert=bool(c.get("insert", False)),
+        removed=bool(c.get("removed", False)),
+        new_h=c.get("new_h"),
     )
 
 

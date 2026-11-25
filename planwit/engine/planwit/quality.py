@@ -105,7 +105,8 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
                 problems.append(f"{s.id}: 캡처 '{s.capture}'를 찾지 못했어요. <서비스>/디자인/화면지도/에 넣으세요.")
             for top in s.components:
                 for c in top.walk():
-                    if (c.marker is not None or c.changed) and None in (c.x, c.y, c.w, c.h):
+                    need = (c.y, c.h) if (c.insert or c.removed) else (c.x, c.y, c.w, c.h)
+                    if (c.marker is not None or c.changed or c.insert or c.removed) and None in need:
                         problems.append(f"{s.id}: 캡처 화면의 '{c.label or c.type}'({c.id})에 위치(x, y, w, h)가 없어요. "
                                         f"엔진 grid로 눈금을 보고 적으세요.")
         if _is_skeleton(s):

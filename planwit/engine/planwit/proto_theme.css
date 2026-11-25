@@ -114,7 +114,9 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 
 /* 기존 화면 캡처를 바탕으로 쓰는 화면: 캡처 위에 바뀐 부분만 덮고, 나머지는 보이지 않는 상자(번호, 이동용) */
 .screen.cap { display: block; }
-.cap-img { display: block; height: auto; user-select: none; -webkit-user-drag: none; }
+.cap-wrap { position: relative; }
+.cap-slice { background-image: var(--cap); background-size: 100% auto; background-repeat: no-repeat; }
+.cap-gap { background: var(--bg); }
 .cap-hot, .cap-patch { position: absolute; }
 .cap-hot { cursor: pointer; }
 .cap-patch { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
