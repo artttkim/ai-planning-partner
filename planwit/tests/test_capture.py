@@ -171,3 +171,16 @@ def test_changed_screen_without_capture_must_be_requested(task):
     (task / "01_검수함.md").write_text("# 검수함\n- 자료 대기: SCR-010 캡처\n", encoding="utf-8")
     problems, _ = quality.check(task, load_screens(task))
     assert not any("SCR-010: 고치는 기존 화면인데" in p for p in problems)
+
+
+def test_service_position_required_when_knowledge_exists(task):
+    (task.parents[2] / ".planwit-workspace").write_text("", encoding="utf-8")
+    k = task.parents[1] / "서비스지식"
+    k.mkdir()
+    (k / "서비스지식.md").write_text("# 서비스 지식\n", encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    assert any("서비스 안에서의 위치" in p for p in problems)
+    s = task / "00_과제요약.md"
+    s.write_text(s.read_text(encoding="utf-8") + "\n## 서비스 안에서의 위치\n", encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    assert not any("서비스 안에서의 위치" in p for p in problems)

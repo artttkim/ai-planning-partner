@@ -15,6 +15,7 @@ from . import paths
 from .screens import Component, Screen
 
 DIRECTION_SECTIONS = {
+    "방향 대안": r"방향 대안|대안 비교",
     "한 문장": r"한 문장",
     "출시 발표문": r"발표문",
     "차별점": r"차별",
@@ -101,6 +102,14 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
             for name, pat in DIRECTION_SECTIONS.items():
                 if not re.search(pat, heads):
                     problems.append(f"방향 정의에 '{name}' 장이 없어요.")
+
+    # 서비스 안에서의 위치: 서비스 지식이 있으면 과제마다 먼저 정한다
+    knowledge = paths.service_root_of(task_dir) / paths.KNOWLEDGE / "서비스지식.md"
+    summary = paths.summary(task_dir)
+    if in_workspace and knowledge.is_file() and summary.is_file():
+        if "## 서비스 안에서의 위치" not in summary.read_text(encoding="utf-8"):
+            problems.append("과제요약에 '서비스 안에서의 위치' 장이 없어요. 서비스 지식을 읽고 전략과의 관계, 지표 가설, "
+                            "기존 기능과의 관계를 먼저 정하세요.")
 
     inbox = paths.summary(task_dir).parent / paths.INBOX
     inbox_text = inbox.read_text(encoding="utf-8") if inbox.is_file() else ""
