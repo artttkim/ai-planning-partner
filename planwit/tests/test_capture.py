@@ -160,3 +160,14 @@ def test_box_snaps_to_element_in_capture(task):
     data = json.loads(build_proto.boxes_path(task, "SCR-010").read_text(encoding="utf-8"))
     x, y, w, h = data["boxes"]["c6"]
     assert (round(x), round(y), round(w), round(h)) == (18, 98, 104, 44)  # 사각형 테두리 + 2px
+
+
+def test_changed_screen_without_capture_must_be_requested(task):
+    (task.parents[2] / ".planwit-workspace").write_text("", encoding="utf-8")
+    f = task / "2_기획문서" / "03_화면설계" / "SCR-010.md"
+    f.write_text(CAPTURE_SCREEN.replace("capture: 로그인.png\n", ""), encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    assert any("SCR-010: 고치는 기존 화면인데 캡처가 없어요" in p for p in problems)
+    (task / "01_검수함.md").write_text("# 검수함\n- 자료 대기: SCR-010 캡처\n", encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    assert not any("SCR-010: 고치는 기존 화면인데" in p for p in problems)

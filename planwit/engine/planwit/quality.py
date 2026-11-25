@@ -99,6 +99,10 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
         # 참고 화면
         if in_workspace and not s.ref and not re.search(rf"기존 화면 확인 필요[^\n]*{re.escape(s.id)}", inbox_text):
             problems.append(f"{s.id}: 따른 기존 화면(- 참고 화면:)이 없어요. 찾지 못했으면 검수함에 '기존 화면 확인 필요: {s.id}'를 남기세요.")
+        if (in_workspace and s.status == "변경" and not s.capture
+                and not re.search(rf"자료 대기[^\n]*{re.escape(s.id)}", inbox_text)):
+            problems.append(f"{s.id}: 고치는 기존 화면인데 캡처가 없어요. 기획자에게 캡처를 대화로 요청하고 "
+                            f"검수함에 '자료 대기: {s.id} 캡처'를 남기세요.")
         if s.capture:
             from .screens import capture_file
             if capture_file(s) is None:
