@@ -70,6 +70,18 @@ def _marked_parent(screen: Screen) -> dict[str, Component]:
     return out
 
 
+def _unreleased(task_dir: Path, screen_id: str) -> bool:
+    """다른 과제가 새로 만드는 중인 화면인지. 아직 앱에 없으니 캡처가 있을 수 없다. 그 과제의 원본을 따른다."""
+    svc = paths.service_root_of(task_dir)
+    for f in (svc / paths.TASKS).glob(f"*/{paths.DOCS}/*화면설계*/{screen_id}.md"):
+        if Path(task_dir) in f.parents:
+            continue
+        first = f.read_text(encoding="utf-8").splitlines()[0] if f.stat().st_size else ""
+        if first.rstrip().endswith("· 신규"):
+            return True
+    return False
+
+
 def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
     problems, notes = [], []
     task_dir = Path(task_dir)
@@ -100,7 +112,8 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
         if in_workspace and not s.ref and not re.search(rf"기존 화면 확인 필요[^\n]*{re.escape(s.id)}", inbox_text):
             problems.append(f"{s.id}: 따른 기존 화면(- 참고 화면:)이 없어요. 찾지 못했으면 검수함에 '기존 화면 확인 필요: {s.id}'를 남기세요.")
         if (in_workspace and s.status == "변경" and not s.capture
-                and not re.search(rf"자료 대기[^\n]*{re.escape(s.id)}", inbox_text)):
+                and not re.search(rf"자료 대기[^\n]*{re.escape(s.id)}", inbox_text)
+                and not _unreleased(task_dir, s.id)):
             problems.append(f"{s.id}: 고치는 기존 화면인데 캡처가 없어요. 기획자에게 캡처를 대화로 요청하고 "
                             f"검수함에 '자료 대기: {s.id} 캡처'를 남기세요.")
         if s.capture:
