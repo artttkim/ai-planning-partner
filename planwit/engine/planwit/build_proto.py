@@ -64,6 +64,8 @@ def _attrs(c: Component, cls: str, extra: str = "") -> str:
         a += f' data-marker="{c.marker}"'
     if c.changed:
         a += ' data-changed="1"'
+    if c.disabled:
+        a += ' data-disabled="1"'
     if c.align:
         a += f' data-align="{html.escape(c.align)}"'
     if c.h and _norm(c.type) not in ("팝업", "바텀시트"):
@@ -597,7 +599,7 @@ def _capture_body(screen: Screen, img: Path, links: dict[str, str], nav: "_Nav |
             w = c.w if c.w is not None else fw - 2 * 16
             pos = f"left:{_num(x)}px;top:{_num(gaps[c.id])}px;width:{_num(w)}px;height:{_num(c.h)}px"
             inner = h.render(dataclasses.replace(c, id=c.id + "~", marker=None, changed=False, insert=False, h=None))
-            layers.append(f'<div class="cap-patch" data-changed="1" {a} style="{pos}">{inner}</div>')
+            layers.append(f'<div class="cap-patch cap-ins" data-changed="1" {a} style="{pos}">{inner}</div>')
             continue
         top = mapped(float(c.y))
         height = c.new_h if (c.changed and c.new_h is not None) else c.h

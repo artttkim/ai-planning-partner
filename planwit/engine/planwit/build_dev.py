@@ -42,6 +42,8 @@ def screen_spec(s: Screen, links: dict[str, str] | None = None) -> dict:
             item["items"] = c.items
         if c.value:
             item["value"] = c.value
+        if c.disabled:
+            item["disabled"] = True
         if c.selected is not None:
             item["selected"] = c.selected
         for key in ("left", "right"):

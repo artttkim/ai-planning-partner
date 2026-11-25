@@ -33,6 +33,7 @@ class Component:
     align: str = ""                                   # 글자 정렬: left, center, right
     size: str = ""                                    # 버튼 크기: small
     value: str = ""                                   # 설정줄의 오른쪽 값, 요일선택의 고른 요일 (예: 월화수목금)
+    disabled: bool = False                            # 지금 쓸 수 없는 요소 (흐리게)
     insert: bool = False      # 캡처 화면: y 자리에 높이 h의 새 영역을 넣는다 (아래는 밀려 내려간다)
     removed: bool = False     # 캡처 화면: y부터 높이 h 영역을 뺀다 (아래가 올라온다)
     new_h: float | None = None  # 캡처 화면: 바뀐 요소의 새 높이 (차이만큼 아래가 밀리거나 올라온다)
@@ -164,6 +165,7 @@ def _component(c: dict, default_id: str) -> Component:
         align=str(c.get("align", "") or ""),
         size=str(c.get("size", "") or ""),
         value=str(c.get("value", "") or ""),
+        disabled=bool(c.get("disabled", False)),
         insert=bool(c.get("insert", False)),
         removed=bool(c.get("removed", False)),
         new_h=c.get("new_h"),

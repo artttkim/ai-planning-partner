@@ -157,4 +157,6 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 .screen.dark .img { background: #2b2f45; color: #9ea3b8; }
 .screen.dark .btn.secondary { border-color: #4a4f69; color: var(--ink); }
 
-.cap-patch > .setrow { min-height: 0; height: calc(100% - 12px); }
+.cap-patch > .setrow { min-height: 0; height: 100%; width: 100%; }
+.cap-ins > .setrow { height: calc(100% - 12px); }
+[data-disabled] { opacity: 0.38; }
