@@ -374,3 +374,18 @@ def test_quality_gate_flow_first(workspace):
     text = "\n".join(quality.check(task, load_screens(task))[0])
     assert "'흐름 대안' 장이 없어요" in text and "'메뉴 구조' 장이 없어요" in text and "'화면 목록' 장이 없어요" in text
     assert "'페르소나' 장이 없어요" not in text
+
+
+def test_quality_gate_stale_words(workspace):
+    """과제요약 '쓰지 않는 말'이 기획 문서에 남으면 잡고, 대안 비교 장은 건너뛴다."""
+    from planwit import quality
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    summ = task / "00_과제요약.md"
+    summ.write_text(summ.read_text(encoding="utf-8") + "\n## 쓰지 않는 말\n\n- 루틴 모드 → 루틴 알림\n", encoding="utf-8")
+    docs = task / "2_기획문서"
+    (docs / "09_메모.md").write_text("# 메모\n\n## 0. 방향 대안\n\n루틴 모드 안\n\n## 1. 본문\n\n루틴 모드를 켠다\n", encoding="utf-8")
+    problems, _ = quality.check(task, load_screens(task))
+    hits = [p for p in problems if "쓰지 않는 말 '루틴 모드'" in p]
+    assert len(hits) == 1 and "09_메모.md 9번째 줄" in hits[0]

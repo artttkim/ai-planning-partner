@@ -91,6 +91,43 @@ def _unreleased(task_dir: Path, screen_id: str) -> bool:
     return False
 
 
+SKIP_HEADS = re.compile(r"대안|결정 기록|변경 이력|원문|쓰지 않는 말|고친 기록")
+MAX_ACTIONS = 8
+
+
+def _banned_words(summary_text: str) -> list[str]:
+    """과제요약 '쓰지 않는 말'의 옛말 목록. 줄 형식: - 옛말 → 새말 (또는 - 옛말)."""
+    m = re.search(r"^## 쓰지 않는 말\s*\n(.*?)(?=^## |\Z)", summary_text, re.M | re.S)
+    if not m:
+        return []
+    out = []
+    for line in m[1].splitlines():
+        line = line.strip()
+        if not line.startswith("- ") or "<" in line:
+            continue
+        old = re.split(r"→|->", line[2:])[0].strip().strip('"“”')
+        if old:
+            out.append(old)
+    return out
+
+
+def _stale_words(task_dir: Path, words: list[str]) -> list[str]:
+    """기획 문서(2_기획문서)에 남은 옛말. 대안 비교, 결정 기록 같은 장은 건너뛴다."""
+    found = []
+    for f in sorted(paths.docs(task_dir).rglob("*.md")):
+        head = ""
+        for no, line in enumerate(f.read_text(encoding="utf-8").splitlines(), 1):
+            if line.startswith("#"):
+                head = line
+                continue
+            if SKIP_HEADS.search(head):
+                continue
+            for w in words:
+                if w in line:
+                    found.append(f"{f.name} {no}번째 줄: 쓰지 않는 말 '{w}'이 남아 있어요. 새 이름이나 새 설계에 맞게 고치세요.")
+    return found
+
+
 def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
     problems, notes = [], []
     task_dir = Path(task_dir)
@@ -132,6 +169,10 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
             problems.append("과제요약에 '서비스 안에서의 위치' 장이 없어요. 서비스 지식을 읽고 전략과의 관계, 지표 가설, "
                             "기존 기능과의 관계를 먼저 정하세요.")
 
+    # 쓰지 않는 말: 이름이 바뀌거나 버린 개념이 문서에 남지 않게
+    if summary.is_file():
+        problems += _stale_words(task_dir, _banned_words(summary.read_text(encoding="utf-8")))
+
     inbox = paths.summary(task_dir).parent / paths.INBOX
     inbox_text = inbox.read_text(encoding="utf-8") if inbox.is_file() else ""
 
@@ -158,6 +199,9 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
                                         f"엔진 grid로 눈금을 보고 적으세요.")
         if _is_skeleton(s):
             continue
+        n_act = sum(1 for top in s.components for c in top.walk() if _norm(c.type) in ACTION_TYPES | INPUT_TYPES)
+        if n_act > MAX_ACTIONS:
+            notes.append(f"{s.id}: 누르거나 입력하는 요소가 {n_act}개예요. 한 화면에 할 일이 많지 않은지, 나눌 수 있는지 보세요.")
         by_no = {str(d.no): d for d in s.descriptions}
         owner = _marked_parent(s)
         for d in s.descriptions:
