@@ -354,3 +354,23 @@ def test_quality_gate_catches_missing_essentials(workspace):
     assert "c3)에 번호와 설명이 없어요" in text
     assert "모호한 말('적절히')" in text
     assert "SCR-030: 유저 플로우에 없는 화면" in text
+
+
+def test_quality_gate_flow_first(workspace):
+    """유저 플로우 단계가 있으면 화면보다 먼저, 페르소나·흐름 대안·메뉴 구조·화면 목록이 있어야 한다."""
+    from planwit import quality
+    from planwit.screens import load_screens
+
+    task = _task(workspace)
+    summ = task / "00_과제요약.md"
+    summ.write_text(summ.read_text(encoding="utf-8") + "\n## 진행 단계\n\n| 순서 | 단계 | 상태 |\n|---|---|---|\n| 2 | 유저 플로우 / 메뉴 구조 | 대기 |\n| 3 | 화면 설계 | 대기 |\n", encoding="utf-8")
+    docs = task / "2_기획문서"
+    for f in docs.glob("*유저플로우*.md"):
+        f.unlink()
+    problems, _ = quality.check(task, load_screens(task))
+    assert any("화면보다 유저 플로우를 먼저" in p for p in problems)
+
+    (docs / "02_유저플로우.md").write_text("# 유저 플로우\n\n## 1. 페르소나\n\n## 5. 흐름\n\nSCR-010 SCR-020 SCR-030\n", encoding="utf-8")
+    text = "\n".join(quality.check(task, load_screens(task))[0])
+    assert "'흐름 대안' 장이 없어요" in text and "'메뉴 구조' 장이 없어요" in text and "'화면 목록' 장이 없어요" in text
+    assert "'페르소나' 장이 없어요" not in text

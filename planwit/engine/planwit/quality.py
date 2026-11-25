@@ -3,6 +3,7 @@
 validate가 함께 실행한다. 고칠 것(problems)이 남아 있으면 그 단계를 검수 대기로 올리지 않는다(run 스킬).
 - 방향 정의: 필요한 장이 모두 있는가 (새 기능, 새 서비스)
 - 화면: 참고한 기존 화면이 있는가, 누르는 요소에 동작이, 입력 요소에 규칙이 있는가, 모호한 말이 없는가
+- 유저 플로우: 화면보다 먼저, 페르소나·흐름 대안·메뉴 구조·화면 목록이 있는가
 - 흐름: 모든 화면이 유저 플로우에 있는가
 - 정책: 화면이 가리킨 정책이 모두 정의되어 있는가
 """
@@ -24,6 +25,12 @@ DIRECTION_SECTIONS = {
     "플랫폼 제약": r"제약",
     "성공 지표": r"지표",
     "위험": r"위험",
+}
+FLOW_SECTIONS = {
+    "페르소나": r"페르소나",
+    "흐름 대안": r"흐름 대안|대안",
+    "메뉴 구조": r"메뉴 구조|IA",
+    "화면 목록": r"화면 목록",
 }
 ACTION_TYPES = {"기본버튼", "보조버튼", "텍스트링크", "플로팅버튼", "토글", "체크박스", "라디오", "선택상자",
                 "설정줄", "세그먼트", "시간선택", "요일선택"}
@@ -103,6 +110,19 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
             for name, pat in DIRECTION_SECTIONS.items():
                 if not re.search(pat, heads):
                     problems.append(f"방향 정의에 '{name}' 장이 없어요.")
+
+    # 유저 플로우 / 메뉴 구조: 화면보다 먼저 정한다
+    if any("유저 플로우" in s for s in stages):
+        found = sorted(docs.glob("*유저플로우*.md"))
+        if not found:
+            if screens:
+                problems.append("화면보다 유저 플로우를 먼저 정하세요: 페르소나, 흐름 대안, 메뉴 구조, 화면 목록 "
+                                "(2_기획문서/NN_유저플로우.md, run 스킬 flow_template.md).")
+        else:
+            heads = "\n".join(l for l in found[0].read_text(encoding="utf-8").splitlines() if l.startswith("#"))
+            for name, pat in FLOW_SECTIONS.items():
+                if not re.search(pat, heads):
+                    problems.append(f"유저 플로우에 '{name}' 장이 없어요. 화면을 그리기 전에 정하세요 (run 스킬 flow_template.md).")
 
     # 서비스 안에서의 위치: 서비스 지식이 있으면 과제마다 먼저 정한다
     knowledge = paths.service_root_of(task_dir) / paths.KNOWLEDGE / "서비스지식.md"
