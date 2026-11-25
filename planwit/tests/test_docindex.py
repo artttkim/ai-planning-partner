@@ -26,6 +26,9 @@ def test_categories_versions_and_noise(tmp_path):
     _touch(src, "기획/모닝루틴_PRD_v2.docx", age_days=10)
     _touch(src, "기획/모닝루틴_PRD_최종.docx", age_days=1)
     _touch(src, "운영/알람 운영정책.xlsx")
+    _touch(src, "02. 전략기획/사업검토_261026.pptx", age_days=3)
+    _touch(src, "02. 전략기획/사업검토_261026-2.pptx", age_days=2)
+    _touch(src, "02. 전략기획/사업검토_261026-3.pptx", age_days=1)
     _touch(src, "데이터/11월 리텐션 리포트.pptx")
     _touch(src, "캡처/메인.png")
     _touch(src, "기획/~$모닝루틴_PRD_최종.docx")   # 열려 있는 임시 파일
@@ -43,6 +46,8 @@ def test_categories_versions_and_noise(tmp_path):
 
     reps = docindex._groups(list(files.values()))
     prd = [r for r in reps if "PRD" in r["path"]]
+    review = [r for r in reps if "사업검토" in r["path"]]
+    assert len(review) == 1 and review[0]["path"].endswith("-3.pptx") and review[0]["versions"] == 3
     assert len(prd) == 1 and prd[0]["path"] == "기획/모닝루틴_PRD_최종.docx" and prd[0]["versions"] == 3
 
 

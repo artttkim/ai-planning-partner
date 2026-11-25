@@ -43,7 +43,7 @@ CATEGORIES = [
 _CAT_RE = [(name, re.compile(pat, re.I)) for name, pat in CATEGORIES]
 _VERSION_RE = re.compile(
     r"([_\-\s\(\[]*(v|ver|rev)\.?\s*\d+([._]\d+)*[\)\]]?)|([_\-\s]*(최종|최종본|최최종|수정본?|final|draft|초안|사본|copy|복사본))"
-    r"|([_\-\s]*\(?\d{1,2}\)$)|([_\-\s]*(19|20)?\d{2}[.\-_]?\d{2}[.\-_]?\d{2})", re.I)
+    r"|([_\s]*\(\d{1,2}\)$)|(-\d{1,2}$)|([_\-\s]*(19|20)?\d{2}[.\-_]?\d{2}[.\-_]?\d{2})", re.I)
 
 
 def _base(stem: str) -> str:
