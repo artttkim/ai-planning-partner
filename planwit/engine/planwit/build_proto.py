@@ -153,6 +153,42 @@ class _Html:
     def _라디오(self, c):
         return self._choice(c, "radio")
 
+    def _설정줄(self, c):
+        """앱 설정 목록의 한 줄: 이름 왼쪽, 값과 > 오른쪽. selected가 있으면 값 대신 토글."""
+        if c.selected is not None and not c.value:
+            right = f'<i class="switch{" on" if c.selected else ""}"></i>'
+        else:
+            on = " on" if c.value.strip().upper() == "ON" else ""
+            right = f'<span class="val{on}">{_t(c.value)}<i class="chev"></i></span>'
+        return f'<div {_attrs(c, "setrow")}><span>{_t(c.label)}</span>{right}</div>'
+
+    def _세그먼트(self, c):
+        items = "".join(f'<span class="s{" on" if i == c.selected else ""}">{_t(n)}</span>'
+                        for i, n in enumerate(c.items or [c.label]))
+        return f'<div {_attrs(c, "seg")}>{items}</div>'
+
+    def _시간선택(self, c):
+        """시간 바퀴. label 예: 'PM 11:30'."""
+        m = re.match(r"\s*(AM|PM)?\s*(\d{1,2}):(\d{2})", c.label or "")
+        ap, hh, mm = (m[1] or "AM", int(m[2]), int(m[3])) if m else ("AM", 7, 0)
+
+        def col(v, mod, base):
+            prev, nxt = (v - 1 - base) % mod + base, (v + 1 - base) % mod + base
+            return (f'<span class="col"><i class="f">{prev:02d}</i><i class="c">{v:02d}</i>'
+                    f'<i class="f">{nxt:02d}</i></span>')
+        aps = (f'<span class="ap"><i class="{"on" if ap == "AM" else ""}">AM</i>'
+               f'<i class="{"on" if ap == "PM" else ""}">PM</i></span>')
+        return f'<div {_attrs(c, "timepick")}>{aps}{col(hh, 12, 1)}{col(mm, 60, 0)}</div>'
+
+    def _요일선택(self, c):
+        days = c.items or ["일", "월", "화", "수", "목", "금", "토"]
+        on = set(c.value)
+        items = "".join(f'<span class="d{" on" if d in on else ""}">{_t(d)}</span>' for d in days)
+        return f'<div {_attrs(c, "days")}>{items}</div>'
+
+    def _소제목(self, c):
+        return f'<div {_attrs(c, "sect")}>{_t(c.label)}</div>'
+
     def _토글(self, c):
         on = " on" if c.selected else ""
         label = f'<span>{_t(c.label)}</span>' if c.label else ""
@@ -454,6 +490,23 @@ def _num(v: float) -> str:
     return f"{round(float(v), 1):g}"
 
 
+def _is_cta(c: Component) -> bool:
+    t = _norm(c.type)
+    if t == "기본버튼" and c.size != "small":
+        return True
+    return t == "행" and bool(c.children) and all(_norm(ch.type) in ("기본버튼", "보조버튼") for ch in c.children) \
+        and any(_norm(ch.type) == "기본버튼" for ch in c.children)
+
+
+STATUSBAR = ('<div class="statusbar"><span>12:30</span><span class="sb-i">'
+             '<svg width="18" height="12" viewBox="0 0 18 12" fill="currentColor"><rect x="0" y="8" width="3" height="4" rx="1"/>'
+             '<rect x="5" y="5" width="3" height="7" rx="1"/><rect x="10" y="2.5" width="3" height="9.5" rx="1"/>'
+             '<rect x="15" y="0" width="3" height="12" rx="1"/></svg>'
+             '<svg width="26" height="12" viewBox="0 0 26 12"><rect x="0.5" y="0.5" width="22" height="11" rx="3" fill="none" '
+             'stroke="currentColor"/><rect x="2" y="2" width="19" height="8" rx="2" fill="currentColor"/>'
+             '<rect x="23.5" y="4" width="2" height="4" rx="1" fill="currentColor"/></svg></span></div>')
+
+
 def _capture_body(screen: Screen, img: Path, links: dict[str, str], nav: "_Nav | None") -> tuple[str, str]:
     """기존 화면 캡처를 바탕으로 깐다. 좌표는 모두 원래 캡처 기준(엔진 grid의 눈금)이다.
 
@@ -575,8 +628,14 @@ def _body(screen: Screen, links: dict[str, str], nav: "_Nav | None" = None) -> s
     over = [c for c in screen.components if _norm(c.type) in OVERLAYS]
     top = [c for c in normal if _norm(c.type) == "상단바"]
     rest = [c for c in normal if _norm(c.type) != "상단바"]
+    # 화면의 주요 행동: 맨 끝의 기본버튼(또는 버튼만 있는 행)은 하단탭바가 없으면 화면 아래에 고정한다
+    cta = []
+    if rest and not tabbar and _is_cta(rest[-1]):
+        cta = [rest.pop()]
     parts = "".join(h.render(c) for c in top)
     parts += f'<main class="content">{"".join(h.render(c) for c in rest)}</main>'
+    if cta:
+        parts += f'<footer class="cta">{h.render(cta[0])}</footer>'
     parts += "".join(h.render(c) for c in fab)
     parts += "".join(h.render(c) for c in tabbar)
     return parts, "".join(h.render(c) for c in over)
@@ -591,10 +650,15 @@ def screen_markup(screen: Screen, screens_by_id: dict[str, Screen], nav: "_Nav |
     bg = ""
     if parent is not None and over and not main.replace('<main class="content"></main>', "").strip():
         pmain, _ = _body(parent, {})
-        bg = f'<div class="screen bg" style="min-height:{fh}px">{pmain}</div>'
+        pdark = " dark" if parent.theme == "dark" else ""
+        pstatus = STATUSBAR if (parent.frame != "web" and capture_file(parent) is None) else ""
+        bg = f'<div class="screen bg{pdark}" style="min-height:{fh}px">{pstatus}{pmain}</div>'
         main = ""
     cap = ' cap' if capture_file(screen) is not None and not bg else ""
-    screen_div = (f'<div class="screen{" overlay-only" if bg else ""}{cap}" style="min-height:{0 if cap else fh}px">'
+    dark = " dark" if screen.theme == "dark" else ""
+    status = STATUSBAR if (screen.frame != "web" and not cap and not bg) else ""
+    screen_div = (f'<div class="screen{" overlay-only" if bg else ""}{cap}{dark}" style="min-height:{0 if cap else fh}px">'
+                  f'{status}'
                   f'{main}{over}</div>')
     return f'<div class="frame" style="width:{fw}px;--vh:{fh}px">{bg}{screen_div}</div>'
 
@@ -1255,7 +1319,7 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
     캡처는 화면 설계서(.pptx)를 만들 때만 필요하다."""
     from .screens import task_title
 
-    task_dir = Path(task_dir)
+    task_dir = Path(task_dir).resolve()
     screens = load_screens(task_dir)
     if not screens:
         return []

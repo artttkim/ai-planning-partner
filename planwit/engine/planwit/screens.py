@@ -32,6 +32,7 @@ class Component:
     right: list[str] = field(default_factory=list)   # 상단바 오른쪽 아이콘 (예: 더보기)
     align: str = ""                                   # 글자 정렬: left, center, right
     size: str = ""                                    # 버튼 크기: small
+    value: str = ""                                   # 설정줄의 오른쪽 값, 요일선택의 고른 요일 (예: 월화수목금)
     insert: bool = False      # 캡처 화면: y 자리에 높이 h의 새 영역을 넣는다 (아래는 밀려 내려간다)
     removed: bool = False     # 캡처 화면: y부터 높이 h 영역을 뺀다 (아래가 올라온다)
     new_h: float | None = None  # 캡처 화면: 바뀐 요소의 새 높이 (차이만큼 아래가 밀리거나 올라온다)
@@ -65,6 +66,7 @@ class Screen:
     ref: str = ""           # 따른 기존 화면 (예: 언어설정)
     base: str = ""          # 서비스 기준본에서 가져온 화면이면 그때 기준본의 지문 (합칠 때 충돌 검사)
     capture: str = ""       # 기존 화면 캡처 파일 이름. 있으면 다시 그리지 않고 캡처를 바탕으로 쓴다
+    theme: str = ""         # dark: 어두운 화면 (밤, 몰입 화면)
     source: Path | None = None
 
 
@@ -128,6 +130,7 @@ def parse_screen(path: Path) -> Screen:
         data = yaml.safe_load(ym["body"]) or {}
         screen.frame = data.get("frame", "web" if screen.platform == "웹" else "mobile")
         screen.capture = str(data.get("capture", "") or "").strip()
+        screen.theme = str(data.get("theme", "") or "").strip()
         screen.components = [_component(c, f"c{i + 1}") for i, c in enumerate(data.get("components", []) or [])]
 
     for cells in _table_rows(sec.get("설명", "")):
@@ -160,6 +163,7 @@ def _component(c: dict, default_id: str) -> Component:
         right=_list(c.get("right")),
         align=str(c.get("align", "") or ""),
         size=str(c.get("size", "") or ""),
+        value=str(c.get("value", "") or ""),
         insert=bool(c.get("insert", False)),
         removed=bool(c.get("removed", False)),
         new_h=c.get("new_h"),

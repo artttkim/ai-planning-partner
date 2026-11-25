@@ -22,6 +22,8 @@ TYPE_MAP = {
     "목록": "list", "카드": "card", "표": "table", "이미지": "image", "아이콘": "icon", "배지": "badge",
     "팝업": "dialog", "바텀시트": "bottom_sheet", "토스트": "toast", "로딩": "loading", "빈화면": "empty_state",
     "구분선": "divider", "행": "row", "묶음": "group", "아바타": "avatar",
+    "설정줄": "list.item.setting", "세그먼트": "segmented", "시간선택": "picker.time", "요일선택": "picker.weekday",
+    "소제목": "text.section",
 }
 STATUS = {"신규": "new", "변경": "changed", "참고": "reference", "기준": "base"}
 POLICY_RE = re.compile(r"POL-\d+")
@@ -38,6 +40,8 @@ def screen_spec(s: Screen, links: dict[str, str] | None = None) -> dict:
             item["text"] = c.label
         if c.items:
             item["items"] = c.items
+        if c.value:
+            item["value"] = c.value
         if c.selected is not None:
             item["selected"] = c.selected
         for key in ("left", "right"):

@@ -13,6 +13,7 @@
   --danger: #e5484d;
   --radius: 12px;
   --pad: 20px;
+  --card: #ffffff;
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: #fff; }
@@ -64,7 +65,7 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 /* 실행 */
 .btn { height: 56px; width: 100%; border-radius: var(--radius); font: inherit; font-size: 16px; font-weight: 600; flex: none; }
 .btn.primary { background: var(--primary); color: var(--on-primary); border: 0; }
-.btn.secondary { background: #fff; color: var(--ink); border: 1px solid #c9ccd2; }
+.btn.secondary { background: var(--card); color: var(--ink); border: 1px solid #c9ccd2; }
 .btn.small { height: 36px; width: auto; padding: 0 14px; font-size: 14px; border-radius: 18px; align-self: flex-start; }
 .row .btn { flex: 1; width: auto; }
 .row .btn.small { flex: none; }
@@ -81,7 +82,7 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 [data-align="center"] { text-align: center; }
 [data-align="right"] { text-align: right; margin-left: auto; }
 .list { display: flex; flex-direction: column; gap: 12px; }
-.card, .group.item { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: #fff; }
+.card, .group.item { border: 1px solid var(--line); border-radius: 16px; padding: 16px; display: flex; flex-direction: column; gap: 8px; background: var(--card); }
 .group { display: flex; flex-direction: column; gap: 8px; }
 .row { display: flex; align-items: center; gap: 8px; }
 .img { height: 160px; border-radius: var(--radius); background: var(--surface); display: flex; align-items: center; justify-content: center; color: var(--sub); font-size: 13px; }
@@ -121,3 +122,39 @@ body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height
 .cap-hot { cursor: pointer; }
 .cap-patch { background: var(--bg); overflow: hidden; display: flex; flex-direction: column; justify-content: center; }
 .cap-patch > * { pointer-events: none; flex: none; }
+
+
+/* 앱 기본 틀: 상태바, 하단 고정 주요 버튼 */
+.statusbar { height: 44px; flex: none; display: flex; align-items: center; justify-content: space-between; padding: 0 22px 0 28px; font-size: 15px; font-weight: 600; color: var(--ink); }
+.statusbar .sb-i { display: inline-flex; gap: 6px; align-items: center; }
+.cta { flex: none; padding: 12px var(--pad) 28px; background: var(--bg); display: flex; gap: 8px; }
+.cta .row { flex: 1; }
+.input input { border: 0; outline: 0; background: transparent; font: inherit; font-size: 15px; color: var(--ink); width: 100%; padding: 0; }
+.input input::placeholder { color: var(--sub); }
+
+/* 설정 목록 줄, 세그먼트, 시간 바퀴, 요일, 소제목 */
+.setrow { min-height: 52px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--card); display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 0 16px; font-size: 15px; }
+.setrow .val { color: var(--sub); display: inline-flex; align-items: center; gap: 8px; font-size: 15px; }
+.setrow .val.on { color: var(--accent); }
+.list:has(> .setrow) { gap: 10px; }
+.seg { display: flex; gap: 8px; }
+.seg .s { flex: 1; height: 44px; border: 1px solid var(--line); border-radius: 22px; background: var(--card); display: flex; align-items: center; justify-content: center; font-size: 15px; }
+.seg .s.on { background: var(--primary); color: var(--on-primary); border-color: var(--primary); font-weight: 600; }
+.timepick { display: flex; justify-content: center; align-items: center; gap: 36px; padding: 8px 0 4px; }
+.timepick i { font-style: normal; }
+.timepick .ap { display: flex; flex-direction: column; gap: 14px; font-size: 18px; color: var(--sub); }
+.timepick .ap .on { color: var(--ink); font-weight: 700; }
+.timepick .col { display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.timepick .col .f { font-size: 22px; color: var(--sub); }
+.timepick .col .c { font-size: 36px; font-weight: 700; letter-spacing: -0.5px; }
+.days { display: flex; justify-content: space-between; }
+.days .d { width: 38px; height: 38px; border-radius: 50%; background: var(--surface); display: inline-flex; align-items: center; justify-content: center; font-size: 14px; }
+.days .d.on { background: var(--accent); color: #fff; }
+.sect { font-size: 14px; font-weight: 600; color: var(--ink); margin-top: 6px; }
+
+/* 어두운 화면 (theme: dark): 밤, 몰입 화면 */
+.screen.dark { --bg: #1e2132; --surface: #2b2f45; --card: #262a3d; --ink: #f1f1f5; --sub: #9ea3b8; --line: #3a3f58; --primary: #f1f1f5; --on-primary: #1e2132; background: var(--bg); color: var(--ink); }
+.screen.dark .img { background: #2b2f45; color: #9ea3b8; }
+.screen.dark .btn.secondary { border-color: #4a4f69; color: var(--ink); }
+
+.cap-patch > .setrow { min-height: 0; height: calc(100% - 12px); }

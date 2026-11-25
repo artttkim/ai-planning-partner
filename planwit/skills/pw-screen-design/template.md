@@ -9,6 +9,7 @@
 
 ```yaml
 frame: mobile          # mobile(360x800) 또는 web(1440x1024). 위치(x, y)는 적지 않는다
+# theme: dark          # 밤, 몰입 화면은 어두운 화면 (ux_기준.md 1장)
 # capture: 로그인.png  # 기존 화면 캡처가 있으면: 캡처를 바탕으로 쓰고, 번호 달 요소와 바뀐 요소만 원래 캡처 좌표 x, y, w, h로 쓴다. 넣기 insert, 높이 바꾸기 new_h, 빼기 removed (SKILL.md 2장 "캡처 화면")
 components:
   - id: c1
