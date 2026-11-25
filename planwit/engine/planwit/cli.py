@@ -85,7 +85,12 @@ def build(kind: str, task: str, version: str, look: str | None = None) -> int:
 def validate(task: str) -> int:
     from . import validate as v
 
-    problems, notes = v.check_all(Path(task).resolve())
+    try:
+        problems, notes = v.check_all(Path(task).resolve())
+    except ValueError as e:
+        print("ID 검사: 고칠 것")
+        print(f"- {e}")
+        return 1
     if notes:
         print("확인할 것")
         for n in notes:

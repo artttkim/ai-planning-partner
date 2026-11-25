@@ -128,7 +128,12 @@ def parse_screen(path: Path) -> Screen:
 
     ym = YAML_RE.search(sec.get("구성", ""))
     if ym:
-        data = yaml.safe_load(ym["body"]) or {}
+        try:
+            data = yaml.safe_load(ym["body"]) or {}
+        except yaml.YAMLError as e:
+            mark = getattr(e, "problem_mark", None)
+            where = f" ({mark.line + 1}번째 줄)" if mark else ""
+            raise ValueError(f"{path.name}: 화면 구성을 읽지 못했어요{where}. 글자에 ? : , 가 있으면 큰따옴표로 감싸 주세요.") from None
         screen.frame = data.get("frame", "web" if screen.platform == "웹" else "mobile")
         screen.capture = str(data.get("capture", "") or "").strip()
         screen.theme = str(data.get("theme", "") or "").strip()
