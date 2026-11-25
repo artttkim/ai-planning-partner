@@ -17,7 +17,7 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 html, body { background: #fff; }
-body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; }
+body { font-family: var(--font); color: var(--ink); font-size: 15px; line-height: 1.45; -webkit-font-smoothing: antialiased; word-break: keep-all; }
 .frame { position: relative; }
 .screen { position: relative; display: flex; flex-direction: column; background: var(--bg); }
 .screen.bg { position: relative; }
