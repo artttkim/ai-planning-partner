@@ -61,6 +61,7 @@ class Screen:
     note: str = ""
     ref: str = ""           # 따른 기존 화면 (예: 언어설정)
     base: str = ""          # 서비스 기준본에서 가져온 화면이면 그때 기준본의 지문 (합칠 때 충돌 검사)
+    capture: str = ""       # 기존 화면 캡처 파일 이름. 있으면 다시 그리지 않고 캡처를 바탕으로 쓴다
     source: Path | None = None
 
 
@@ -123,6 +124,7 @@ def parse_screen(path: Path) -> Screen:
     if ym:
         data = yaml.safe_load(ym["body"]) or {}
         screen.frame = data.get("frame", "web" if screen.platform == "웹" else "mobile")
+        screen.capture = str(data.get("capture", "") or "").strip()
         screen.components = [_component(c, f"c{i + 1}") for i, c in enumerate(data.get("components", []) or [])]
 
     for cells in _table_rows(sec.get("설명", "")):
@@ -156,6 +158,38 @@ def _component(c: dict, default_id: str) -> Component:
         align=str(c.get("align", "") or ""),
         size=str(c.get("size", "") or ""),
     )
+
+
+IMAGE_EXT = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+
+
+def capture_dirs(screen: "Screen") -> list[Path]:
+    """캡처를 찾는 곳: 화면 원본 폴더, 과제의 1_입력자료, 서비스의 디자인/화면지도, 회사/화면지도."""
+    if screen.source is None:
+        return []
+    folder = Path(screen.source).parent
+    base = folder.parent.parent if folder.parent.name == paths.DOCS else folder.parent
+    svc = paths.service_root_of(base)
+    out = [folder, base / paths.INPUT, svc / paths.DESIGN / "화면지도",
+           paths.workspace_of(base) / paths.COMPANY / "화면지도"]
+    return [d for d in out if d.is_dir()]
+
+
+def capture_file(screen: "Screen") -> Path | None:
+    """화면의 캡처 파일. 이름(또는 상대 경로)으로 찾는 곳을 차례로 본다. 없으면 None."""
+    if not screen.capture:
+        return None
+    name = screen.capture.replace("\\", "/")
+    for d in capture_dirs(screen):
+        direct = d / name
+        if direct.is_file():
+            return direct
+    leaf = Path(name).name
+    for d in capture_dirs(screen):
+        found = sorted(p for p in d.rglob(leaf) if p.is_file())
+        if found:
+            return found[0]
+    return None
 
 
 def all_components(screen: "Screen") -> list[Component]:

@@ -99,6 +99,15 @@ def check(task_dir: Path, screens: list[Screen]) -> tuple[list[str], list[str]]:
         # 참고 화면
         if in_workspace and not s.ref and not re.search(rf"기존 화면 확인 필요[^\n]*{re.escape(s.id)}", inbox_text):
             problems.append(f"{s.id}: 따른 기존 화면(- 참고 화면:)이 없어요. 찾지 못했으면 검수함에 '기존 화면 확인 필요: {s.id}'를 남기세요.")
+        if s.capture:
+            from .screens import capture_file
+            if capture_file(s) is None:
+                problems.append(f"{s.id}: 캡처 '{s.capture}'를 찾지 못했어요. <서비스>/디자인/화면지도/에 넣으세요.")
+            for top in s.components:
+                for c in top.walk():
+                    if (c.marker is not None or c.changed) and None in (c.x, c.y, c.w, c.h):
+                        problems.append(f"{s.id}: 캡처 화면의 '{c.label or c.type}'({c.id})에 위치(x, y, w, h)가 없어요. "
+                                        f"엔진 grid로 눈금을 보고 적으세요.")
         if _is_skeleton(s):
             continue
         by_no = {str(d.no): d for d in s.descriptions}

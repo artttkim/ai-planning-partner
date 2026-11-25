@@ -306,6 +306,10 @@ def main(argv=None) -> int:
     mg = sub.add_parser("migrate", help="예전 구조의 과제 폴더를 지금 구조로 옮기기")
     mg.add_argument("workspace", nargs="?")
     mg.add_argument("--service", help="예전 구조의 과제와 기준본을 이 이름의 서비스 폴더 아래로 옮긴다")
+    gr = sub.add_parser("grid", help="기존 화면 캡처에 위치 눈금을 그린 그림 만들기 (화면 원본의 x, y, w, h를 읽는 용도)")
+    gr.add_argument("image")
+    gr.add_argument("--frame", choices=["mobile", "web"], default="mobile")
+    gr.add_argument("--out")
     dt = sub.add_parser("detect", help="직접 고친 회사 양식 파일 감지")
     dt.add_argument("workspace", nargs="?")
     dt.add_argument("--hook", action="store_true")
@@ -334,6 +338,16 @@ def main(argv=None) -> int:
         return extract(args.path, args.out)
     if args.command == "detect":
         return detect(args.workspace, args.hook)
+    if args.command == "grid":
+        from .build_proto import grid
+        try:
+            out, w, h = grid(Path(args.image), args.frame, Path(args.out) if args.out else None)
+        except (FileNotFoundError, RuntimeError) as err:
+            print(err, file=sys.stderr)
+            return 1
+        print(out)
+        print(f"화면 좌표: 너비 {w}px, 높이 {h}px (빨간 선 {50 if w <= 480 else 100}px마다)")
+        return 0
     if args.command == "migrate":
         return migrate(args.workspace, args.service)
     return 2

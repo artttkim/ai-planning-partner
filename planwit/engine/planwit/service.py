@@ -12,6 +12,7 @@ from __future__ import annotations
 import datetime as dt
 import hashlib
 import re
+import shutil
 from pathlib import Path
 
 from . import paths
@@ -162,6 +163,29 @@ def _to_base_policy(sec: str, task_name: str) -> str:
     return f"{head}\n\n- 반영: {task_name} ({dt.date.today():%Y.%m.%d})\n{rest.lstrip(chr(10))}".rstrip() + "\n"
 
 
+def _keep_captures(task_dir: Path, service_root: Path):
+    """과제 화면이 쓰는 캡처가 서비스 화면지도에 없으면 복사한다. 합친 뒤에도 기준본 화면이 캡처를 찾게 하기 위해서다."""
+    from .screens import load_screens, capture_file
+    maps = Path(service_root) / paths.DESIGN / "화면지도"
+    try:
+        screens = load_screens(task_dir)
+    except (FileNotFoundError, ValueError):
+        return
+    for s in screens:
+        f = capture_file(s)
+        if f is None or s.status == "참고":
+            continue
+        try:
+            f.relative_to(maps)
+            continue
+        except ValueError:
+            pass
+        dst = maps / Path(s.capture).name
+        if not dst.exists():
+            maps.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(f, dst)
+
+
 def merge(task_dir: Path, dry_run: bool = False) -> tuple[list[str], list[str]]:
     """과제를 기준본에 합친다. (한 일, 충돌) 목록을 돌려준다. 충돌이 하나라도 있으면 아무것도 쓰지 않는다."""
     task_dir = Path(task_dir)
@@ -218,6 +242,7 @@ def merge(task_dir: Path, dry_run: bool = False) -> tuple[list[str], list[str]]:
     for target, text in writes:
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text, encoding="utf-8")
+    _keep_captures(task_dir, workspace)
     if new_pols != current_pols:
         def key(pid):
             return int(pid.split("-")[1])

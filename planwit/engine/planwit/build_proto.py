@@ -19,7 +19,7 @@ import tempfile
 from pathlib import Path
 
 from . import paths
-from .screens import Component, Screen, load_screens
+from .screens import Component, Screen, capture_file, load_screens
 
 PROTO = "프로토타입"
 FRAMES = {"mobile": (360, 760), "web": (1440, 1024)}
@@ -336,7 +336,66 @@ def _parent_id(screen_id: str) -> str | None:
     return m[1] if m else None
 
 
+_URI_CACHE: dict[Path, str] = {}
+
+
+def _data_uri(path: Path) -> str:
+    import base64
+    if path not in _URI_CACHE:
+        mime = {".jpg": "jpeg", ".jpeg": "jpeg", ".webp": "webp", ".gif": "gif"}.get(path.suffix.lower(), "png")
+        _URI_CACHE[path] = f"data:image/{mime};base64," + base64.b64encode(path.read_bytes()).decode("ascii")
+    return _URI_CACHE[path]
+
+
+def _placed(c: Component) -> bool:
+    return None not in (c.x, c.y, c.w, c.h)
+
+
+def _capture_body(screen: Screen, img: Path, links: dict[str, str], nav: "_Nav | None") -> tuple[str, str]:
+    """기존 화면 캡처를 바탕으로 깐다. 위치(x, y, w, h)가 있는 요소만 그 자리에 올린다.
+
+    - changed: true 요소는 캡처 위에 새로 그려 덮는다 (바뀐 부분)
+    - 나머지는 보이지 않는 상자로 두고 번호, 누르면 이동, 의견 달기에만 쓴다
+    팝업, 바텀시트, 토스트는 평소처럼 위에 그린다."""
+    fw, _ = FRAMES.get(screen.frame, FRAMES["mobile"])
+    h = _Html(links, nav, screen.id)
+    layers = []
+
+    def place(c: Component):
+        if _norm(c.type) in OVERLAYS:
+            return
+        if not _placed(c):
+            for ch in c.children:
+                place(ch)
+            return
+        pos = f"left:{c.x}px;top:{c.y}px;width:{c.w}px;height:{c.h}px"
+        a = f'data-cid="{_t(c.id)}"'
+        if c.marker is not None:
+            a += f' data-marker="{c.marker}"'
+        go = links.get(c.id)
+        if isinstance(go, str) and go != screen.id:
+            a += f' data-go="{_t(go)}"'
+        if c.changed:
+            import dataclasses
+            inner = h.render(dataclasses.replace(c, id=c.id + "~", marker=None, changed=False, h=None))
+            layers.append(f'<div class="cap-patch" data-changed="1" {a} style="{pos}">{inner}</div>')
+            return
+        layers.append(f'<div class="cap-hot" {a} style="{pos}"></div>')
+        for ch in c.children:
+            place(ch)
+
+    for c in screen.components:
+        place(c)
+    over = [c for c in screen.components if _norm(c.type) in OVERLAYS]
+    main = (f'<img class="cap-img" alt="{_t(screen.name)}" src="{_data_uri(img)}" style="width:{fw}px">'
+            + "".join(layers))
+    return main, "".join(h.render(c) for c in over)
+
+
 def _body(screen: Screen, links: dict[str, str], nav: "_Nav | None" = None) -> str:
+    img = capture_file(screen)
+    if img is not None:
+        return _capture_body(screen, img, links, nav)
     h = _Html(links, nav, screen.id)
     h.has_search = any(_norm(c.type) == "검색창" for c in _all(screen))
     normal = [c for c in screen.components if _norm(c.type) not in OVERLAYS + ("하단탭바", "플로팅버튼")]
@@ -359,11 +418,12 @@ def screen_markup(screen: Screen, screens_by_id: dict[str, Screen], nav: "_Nav |
     main, over = _body(screen, links, nav)
     parent = screens_by_id.get(_parent_id(screen.id) or "")
     bg = ""
-    if parent is not None and over and not main.replace('<main class="content"></main>', ""):
+    if parent is not None and over and not main.replace('<main class="content"></main>', "").strip():
         pmain, _ = _body(parent, {})
         bg = f'<div class="screen bg" style="min-height:{fh}px">{pmain}</div>'
         main = ""
-    screen_div = (f'<div class="screen{" overlay-only" if bg else ""}" style="min-height:{fh}px">'
+    cap = ' cap' if capture_file(screen) is not None and not bg else ""
+    screen_div = (f'<div class="screen{" overlay-only" if bg else ""}{cap}" style="min-height:{0 if cap else fh}px">'
                   f'{main}{over}</div>')
     return f'<div class="frame" style="width:{fw}px;--vh:{fh}px">{bg}{screen_div}</div>'
 
@@ -1078,3 +1138,46 @@ def build(task_dir: Path, capture: bool = True) -> list[Path]:
         boxes_path(task_dir, s.id).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
         written.append(png)
     return written
+
+
+def grid(image: Path, frame: str = "mobile", out: Path | None = None) -> tuple[Path, int, int]:
+    """캡처에 위치 눈금을 그린 그림을 만든다. 캡처를 화면 너비(앱 360, 웹 1440)로 줄인 좌표다.
+
+    화면 원본의 x, y, w, h는 이 눈금으로 읽는다. (그림 경로, 너비, 높이)를 돌려준다."""
+    image = Path(image)
+    fw, fh = FRAMES.get(frame, FRAMES["mobile"])
+    step, major = (10, 50) if fw <= 480 else (20, 100)
+    out = Path(out) if out else Path(tempfile.gettempdir()) / f"planwit_격자_{image.stem}.png"
+    browser = find_browser()
+    if not browser:
+        raise FileNotFoundError("눈금 그림을 만들 브라우저(Edge 또는 Chrome)를 찾지 못했어요.")
+    css = (f"*{{margin:0;padding:0}}body{{background:#fff}}.frame{{position:relative;width:{fw}px}}"
+           f".frame img{{display:block;width:{fw}px;height:auto}}"
+           f".g{{position:absolute;inset:0;pointer-events:none;"
+           f"background-image:linear-gradient(rgba(255,0,80,.55) 1px,transparent 1px),"
+           f"linear-gradient(90deg,rgba(255,0,80,.55) 1px,transparent 1px),"
+           f"linear-gradient(rgba(0,120,255,.18) 1px,transparent 1px),"
+           f"linear-gradient(90deg,rgba(0,120,255,.18) 1px,transparent 1px);"
+           f"background-size:{major}px {major}px,{major}px {major}px,{step}px {step}px,{step}px {step}px}}"
+           f".n{{position:absolute;font:bold 9px sans-serif;color:#d00040;background:rgba(255,255,255,.85);padding:0 1px}}")
+    labels = f"""
+<script>
+(function(){{
+  var f = document.querySelector('.frame'), h = f.getBoundingClientRect().height;
+  for (var y = {major}; y < h; y += {major}) {{ var n = document.createElement('span'); n.className = 'n';
+    n.style.left = '0px'; n.style.top = (y + 1) + 'px'; n.textContent = y; f.appendChild(n); }}
+  for (var x = {major}; x < {fw}; x += {major}) {{ var n = document.createElement('span'); n.className = 'n';
+    n.style.left = (x + 1) + 'px'; n.style.top = '0px'; n.textContent = x; f.appendChild(n); }}
+}})();
+</script>"""
+    doc = (f'<!doctype html><html><head><meta charset="utf-8"><style>{css}</style></head><body>'
+           f'<div class="frame"><img src="{_data_uri(image)}"><div class="g"></div></div>{labels}{_COLLECT}</body></html>')
+    out.parent.mkdir(parents=True, exist_ok=True)
+    probe = out.with_suffix(".probe.html")
+    probe.write_text(doc, encoding="utf-8")
+    try:
+        height = max(1, int(_measure(browser, probe, fw, fh)["height"]))
+        _shoot(browser, probe, out, fw, height, scale=2)
+    finally:
+        probe.unlink(missing_ok=True)
+    return out, fw, height
