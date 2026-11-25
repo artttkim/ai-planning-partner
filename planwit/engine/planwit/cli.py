@@ -185,7 +185,7 @@ def merge(task: str, dry_run: bool) -> int:
     return 1 if conflicts else 0
 
 
-def extract(path: str, out: str | None) -> int:
+def extract(path: str, out: str | None, head: int = 0) -> int:
     from . import extract as ex
 
     try:
@@ -193,6 +193,8 @@ def extract(path: str, out: str | None) -> int:
     except Exception as e:  # 읽지 못한 이유를 그대로 보여 준다
         print(f"읽기 실패: {Path(path).name}: {e}")
         return 1
+    if head and len(text) > head:
+        text = ex.skim(text, head)
     if out:
         Path(out).write_text(text, encoding="utf-8")
         print(f"저장: {out}")
@@ -303,6 +305,13 @@ def main(argv=None) -> int:
     e = sub.add_parser("extract", help="문서를 텍스트로 변환")
     e.add_argument("path")
     e.add_argument("--out")
+    e.add_argument("--head", type=int, default=0, help="훑어 읽기: 제목 줄과 앞부분만 이 글자 수까지")
+    ix = sub.add_parser("index", help="자료 폴더 색인 (파일 이름, 날짜, 크기만. 내용은 읽지 않음)")
+    ix.add_argument("folder")
+    ix.add_argument("--service", required=True, help="색인을 둘 서비스 폴더")
+    fd = sub.add_parser("find-docs", help="자료 색인에서 낱말로 파일 찾기")
+    fd.add_argument("service")
+    fd.add_argument("words", nargs="+")
     mg = sub.add_parser("migrate", help="예전 구조의 과제 폴더를 지금 구조로 옮기기")
     mg.add_argument("workspace", nargs="?")
     mg.add_argument("--service", help="예전 구조의 과제와 기준본을 이 이름의 서비스 폴더 아래로 옮긴다")
@@ -335,7 +344,32 @@ def main(argv=None) -> int:
     if args.command == "merge":
         return merge(args.task, args.dry_run)
     if args.command == "extract":
-        return extract(args.path, args.out)
+        return extract(args.path, args.out, args.head)
+    if args.command == "index":
+        from . import docindex
+        try:
+            md, info = docindex.build(Path(args.folder), Path(args.service))
+        except FileNotFoundError as err:
+            print(err, file=sys.stderr)
+            return 1
+        cats = ", ".join(f"{k} {v}" for k, v in sorted(info["categories"].items(), key=lambda kv: -kv[1]))
+        print(f"색인: {md}")
+        print(f"문서 {info['documents']}개 (판 묶기 전 파일 {info['files']}개). 분류: {cats}")
+        if info["changed"]:
+            print(f"지난 색인 뒤 새로 생기거나 바뀐 문서 {info['changed']}개")
+        return 0
+    if args.command == "find-docs":
+        from . import docindex
+        try:
+            hits = docindex.find(Path(args.service), args.words)
+        except FileNotFoundError as err:
+            print(err, file=sys.stderr)
+            return 1
+        for h in hits:
+            print(f"{h['full']}\t{h['category']}\t판 {h.get('versions', 1)}")
+        if not hits:
+            print("찾은 파일 없음")
+        return 0
     if args.command == "detect":
         return detect(args.workspace, args.hook)
     if args.command == "grid":

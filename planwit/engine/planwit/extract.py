@@ -4,6 +4,15 @@ from __future__ import annotations
 from pathlib import Path
 
 
+def skim(text: str, limit: int) -> str:
+    """훑어 읽기용 요약: 제목처럼 보이는 줄을 먼저 모으고, 남는 만큼 앞부분을 붙인다. 토큰을 아끼기 위해서다."""
+    lines = [l.rstrip() for l in text.splitlines() if l.strip()]
+    heads = [l for l in lines if l.lstrip().startswith(("#", "---")) or (len(l) <= 40 and not l.endswith(("다.", "요.", ".")))]
+    out = "[제목처럼 보이는 줄]\n" + "\n".join(heads)[: limit // 2]
+    out += "\n\n[앞부분]\n" + "\n".join(lines)[: max(0, limit - len(out))]
+    return out + "\n\n[훑어 읽기: 뒷부분 생략]"
+
+
 def to_text(path: Path) -> str:
     path = Path(path)
     ext = path.suffix.lower()
